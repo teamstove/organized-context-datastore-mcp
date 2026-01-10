@@ -13,23 +13,96 @@ import { KnowledgeStoreError } from './IKnowledgeStore.js'
 import type { FileMetadata, VersionEntry } from '../types/index.js'
 
 /**
+ * デフォルトの除外パターン
+ * 
+ * これらは明示的に指定しなくても常に除外される。
+ * 除外を解除したい場合は ignorePatterns に `!node_modules` のように指定する。
+ */
+export const DEFAULT_IGNORE_PATTERNS = [
+  // バージョン管理
+  '.git/**',
+  '.svn/**',
+  '.hg/**',
+  
+  // パッケージマネージャー
+  'node_modules/**',
+  'bower_components/**',
+  '.pnpm/**',
+  
+  // ビルド出力
+  'dist/**',
+  'build/**',
+  'out/**',
+  '.next/**',
+  '.nuxt/**',
+  
+  // キャッシュ・一時ファイル
+  '.cache/**',
+  '.tmp/**',
+  '.temp/**',
+  '*.log',
+  
+  // IDE・エディタ
+  '.idea/**',
+  '.vscode/**',
+  '*.swp',
+  '*.swo',
+  '.DS_Store',
+  
+  // テスト・カバレッジ
+  'coverage/**',
+  '.nyc_output/**',
+]
+
+/**
+ * Git コミット設定
+ */
+export type GitMode = 'auto-commit' | 'manual' | 'none'
+
+/**
  * FileGitStore 設定
  */
 export interface FileGitStoreConfig {
   /** ルートディレクトリ */
   rootPath: string
   
-  /** Git を使用するか */
-  useGit?: boolean
-  
-  /** 自動コミットを行うか */
-  autoCommit?: boolean
+  /**
+   * Git コミット設定
+   * - 'auto-commit': 各操作後に自動コミット
+   * - 'manual': commit ツールで明示的にコミット（デフォルト）
+   * - 'none': Git を使用しない
+   */
+  git?: GitMode
   
   /** コミット著者名 */
   authorName?: string
   
   /** コミット著者メール */
   authorEmail?: string
+  
+  /**
+   * 除外パターン (glob 形式)
+   * 
+   * 例: ['node_modules/**', 'dist/**', '*.test.md']
+   */
+  ignorePatterns?: string[]
+  
+  /**
+   * 対象ファイルパターン (glob 形式)
+   * 
+   * デフォルト: **\/*.md
+   */
+  includePatterns?: string[]
+  
+  // ==========================================================================
+  // 後方互換性のための旧フィールド（非推奨）
+  // ==========================================================================
+  
+  /** @deprecated git: 'none' を使用してください */
+  useGit?: boolean
+  
+  /** @deprecated git: 'auto-commit' を使用してください */
+  autoCommit?: boolean
 }
 
 /**
@@ -37,18 +110,79 @@ export interface FileGitStoreConfig {
  */
 export class FileGitStore implements IKnowledgeStore {
   private readonly rootPath: string
-  private readonly useGit: boolean
-  private readonly autoCommit: boolean
+  private readonly gitMode: GitMode
   private git: SimpleGit | null = null
   private readonly authorName: string
   private readonly authorEmail: string
+  private readonly ignorePatterns: string[]
+  private readonly includePatterns: string[]
   
   constructor(config: FileGitStoreConfig) {
     this.rootPath = path.resolve(config.rootPath)
-    this.useGit = config.useGit ?? true
-    this.autoCommit = config.autoCommit ?? false
     this.authorName = config.authorName ?? 'Knowledge Graph MCP'
     this.authorEmail = config.authorEmail ?? 'kg-mcp@localhost'
+    this.includePatterns = config.includePatterns ?? ['**/*.md']
+    
+    // Git モードの決定（新しい git フィールドを優先、旧フィールドは後方互換）
+    if (config.git) {
+      this.gitMode = config.git
+    } else if (config.useGit === false) {
+      // 旧 useGit: false は git: 'none' と同等
+      this.gitMode = 'none'
+    } else if (config.autoCommit === true) {
+      // 旧 autoCommit: true は git: 'auto-commit' と同等
+      this.gitMode = 'auto-commit'
+    } else {
+      // デフォルトは 'manual'（手動コミット）
+      this.gitMode = 'manual'
+    }
+    
+    // ignorePatterns の処理:
+    // 1. デフォルトパターンをベースにする
+    // 2. ユーザー指定のパターンを追加
+    // 3. `!pattern` 形式で除外解除が可能
+    this.ignorePatterns = this.resolveIgnorePatterns(config.ignorePatterns ?? [])
+  }
+  
+  /** Git を使用するか */
+  private get useGit(): boolean {
+    return this.gitMode !== 'none'
+  }
+  
+  /** 自動コミットを行うか */
+  private get autoCommit(): boolean {
+    return this.gitMode === 'auto-commit'
+  }
+  
+  /**
+   * ignore patterns を解決
+   * 
+   * - デフォルトパターンをベースに
+   * - ユーザー指定の `!pattern` で除外解除
+   * - ユーザー指定の通常パターンを追加
+   */
+  private resolveIgnorePatterns(userPatterns: string[]): string[] {
+    // 除外解除パターン（!で始まるもの）を抽出
+    const negations = userPatterns
+      .filter(p => p.startsWith('!'))
+      .map(p => p.slice(1)) // ! を除去
+    
+    // 追加パターン（!で始まらないもの）を抽出
+    const additions = userPatterns.filter(p => !p.startsWith('!'))
+    
+    // デフォルトから除外解除パターンを除く
+    const effectiveDefaults = DEFAULT_IGNORE_PATTERNS.filter(defaultPattern => {
+      // negations に含まれるパターンは除外しない
+      return !negations.some(neg => {
+        // 完全一致または前方一致（例: !node_modules で node_modules/** も解除）
+        return defaultPattern === neg || 
+               defaultPattern.startsWith(neg + '/') ||
+               defaultPattern.startsWith(neg + '/**')
+      })
+    })
+    
+    // デフォルト + ユーザー追加パターン
+    return [...effectiveDefaults, ...additions]
   }
   
   // ==========================================================================
@@ -111,11 +245,38 @@ export class FileGitStore implements IKnowledgeStore {
   }
   
   async list(pattern: string): Promise<string[]> {
+    // ignorePatterns が設定されている場合は除外
     const files = await glob(pattern, {
       cwd: this.rootPath,
-      nodir: true
+      nodir: true,
+      ignore: this.ignorePatterns
     })
     return files.sort()
+  }
+  
+  /**
+   * includePatterns を考慮したファイル一覧を取得
+   * 
+   * @param subPath サブパス（ルートからの相対）
+   * @returns ファイルパス一覧
+   */
+  async listWithIncludePatterns(subPath: string = ''): Promise<string[]> {
+    const allFiles: Set<string> = new Set()
+    
+    // 各 includePattern に対して検索
+    for (const includePattern of this.includePatterns) {
+      // subPath と includePattern を組み合わせる
+      const fullPattern = subPath 
+        ? `${subPath}/${includePattern.replace(/^\*\*\//, '')}` 
+        : includePattern
+      
+      const files = await this.list(fullPattern)
+      for (const file of files) {
+        allFiles.add(file)
+      }
+    }
+    
+    return [...allFiles].sort()
   }
   
   async listMultiple(patterns: string[]): Promise<string[]> {

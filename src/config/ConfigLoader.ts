@@ -1,22 +1,52 @@
 /**
  * Config Loader
  * 
- * Knowledge Graph MCP の設定ファイル読み込みと自動検出
+ * Organized Context Datastore MCP の設定ファイル読み込みと自動検出
+ * 
+ * ## 設定ファイル
+ * - グローバル設定: ~/.ocd/config.json
+ * - ローカル設定: .ocd.config.json (cwd から上位に探索)
+ * - レガシー設定: kgmcp.config.json (後方互換性)
  */
 
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
+import * as os from 'node:os'
 import type { 
   KnowledgeGraphMCPConfig, 
   ContextRootConfig,
   VersionControlMode,
-  WritePermissionConfig
+  WritePermissionConfig,
+  GlobalConfig,
+  LocalConfig,
+  ResolvedConfig,
+  GlobalContextRootConfig,
+  LocalContextRootConfig
 } from '../types/index.js'
+
+// =============================================================================
+// Constants
+// =============================================================================
 
 /**
  * 設定ファイル名
  */
 export const CONFIG_FILE_NAME = 'kgmcp.config.json'
+
+/**
+ * ローカル設定ファイル名
+ */
+export const LOCAL_CONFIG_FILE_NAME = '.ocd.config.json'
+
+/**
+ * グローバル設定ディレクトリ
+ */
+export const GLOBAL_CONFIG_DIR = '.ocd'
+
+/**
+ * グローバル設定ファイル名
+ */
+export const GLOBAL_CONFIG_FILE_NAME = 'config.json'
 
 /**
  * 設定ファイルの形式
@@ -316,4 +346,182 @@ export class ConfigLoader {
 export async function loadConfig(storagePath: string): Promise<KnowledgeGraphMCPConfig> {
   const loader = new ConfigLoader(storagePath)
   return loader.load()
+}
+
+// =============================================================================
+// CWD-based Config Resolution (for local-dev mode)
+// =============================================================================
+
+/**
+ * グローバル設定を読み込む
+ * 
+ * @returns グローバル設定（見つからない場合は空オブジェクト）
+ */
+export async function loadGlobalConfig(): Promise<GlobalConfig> {
+  const globalConfigPath = path.join(os.homedir(), GLOBAL_CONFIG_DIR, GLOBAL_CONFIG_FILE_NAME)
+  
+  try {
+    const content = await fs.readFile(globalConfigPath, 'utf-8')
+    return JSON.parse(content) as GlobalConfig
+  } catch {
+    return {}
+  }
+}
+
+/**
+ * cwd から上位に向かって設定ファイルを探索
+ * 
+ * @param cwd 作業ディレクトリ
+ * @returns ローカル設定と設定ファイルのパス（見つからない場合は undefined）
+ */
+export async function findLocalConfig(cwd: string): Promise<{ config: LocalConfig; configPath: string } | undefined> {
+  let currentDir = path.resolve(cwd)
+  const root = path.parse(currentDir).root
+  
+  while (currentDir !== root) {
+    const configPath = path.join(currentDir, LOCAL_CONFIG_FILE_NAME)
+    
+    try {
+      const content = await fs.readFile(configPath, 'utf-8')
+      return {
+        config: JSON.parse(content) as LocalConfig,
+        configPath
+      }
+    } catch {
+      // ファイルなし、上位ディレクトリを探索
+    }
+    
+    currentDir = path.dirname(currentDir)
+  }
+  
+  return undefined
+}
+
+/**
+ * cwd から設定を解決
+ * 
+ * 1. cwd から上位に .ocd.config.json を探索
+ * 2. 見つかった場合: ローカル設定を読み込み
+ * 3. inheritGlobal が true (デフォルト) の場合: グローバル設定とマージ
+ * 4. 見つからない場合: cwd を Context Root として使用
+ * 
+ * @param cwd 作業ディレクトリ
+ * @returns 解決済み設定
+ */
+export async function resolveConfigFromCwd(cwd: string): Promise<ResolvedConfig> {
+  // ローカル設定を探索
+  const localResult = await findLocalConfig(cwd)
+  
+  // グローバル設定を読み込み
+  const globalConfig = await loadGlobalConfig()
+  
+  if (localResult) {
+    // ローカル設定が見つかった
+    const { config: localConfig, configPath } = localResult
+    const projectDir = path.dirname(configPath)
+    
+    // Context Roots を解決
+    const contextRoots: ContextRootConfig[] = []
+    
+    // ローカル Context Roots
+    if (localConfig.contextRoots) {
+      for (const root of localConfig.contextRoots) {
+        contextRoots.push(resolveLocalContextRoot(root, projectDir))
+      }
+    }
+    
+    // グローバル Context Roots をマージ
+    if (localConfig.inheritGlobal !== false && globalConfig.globalContextRoots) {
+      for (const root of globalConfig.globalContextRoots) {
+        // 既存の ID と重複しない場合のみ追加
+        if (!contextRoots.some(r => r.id === root.id)) {
+          contextRoots.push(resolveGlobalContextRoot(root))
+        }
+      }
+    }
+    
+    return {
+      configPath,
+      contextRoots,
+      versionControlMode: localConfig.versionControlMode ?? 'immediate',
+      writePermission: localConfig.writePermission ?? { mode: 'unrestricted' }
+    }
+  }
+  
+  // ローカル設定が見つからない場合: cwd を Context Root として使用
+  const cwdContextRoot: ContextRootConfig = {
+    id: slugify(path.basename(cwd)),
+    name: path.basename(cwd),
+    path: cwd,
+    description: `Auto-detected from cwd: ${cwd}`
+  }
+  
+  // グローバル Context Roots も追加
+  const contextRoots: ContextRootConfig[] = [cwdContextRoot]
+  
+  if (globalConfig.globalContextRoots) {
+    for (const root of globalConfig.globalContextRoots) {
+      contextRoots.push(resolveGlobalContextRoot(root))
+    }
+  }
+  
+  return {
+    contextRoots,
+    versionControlMode: 'immediate',
+    writePermission: { mode: 'unrestricted' }
+  }
+}
+
+/**
+ * ローカル Context Root 設定を解決
+ */
+function resolveLocalContextRoot(root: LocalContextRootConfig, projectDir: string): ContextRootConfig {
+  // 相対パスを絶対パスに解決
+  const absolutePath = path.isAbsolute(root.path)
+    ? root.path
+    : path.resolve(projectDir, root.path)
+  
+  return {
+    id: root.id ?? slugify(path.basename(root.path)),
+    name: root.name ?? path.basename(root.path),
+    path: absolutePath,
+    description: root.description,
+    readOnly: root.readOnly
+  }
+}
+
+/**
+ * グローバル Context Root 設定を解決
+ */
+function resolveGlobalContextRoot(root: GlobalContextRootConfig): ContextRootConfig {
+  return {
+    id: root.id,
+    name: root.name,
+    path: root.path,
+    description: root.description,
+    readOnly: root.readOnly ?? true // グローバルはデフォルトで読み取り専用
+  }
+}
+
+/**
+ * 文字列をスラッグ化（スタンドアロン関数）
+ */
+function slugify(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^\w\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf-]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+}
+
+/**
+ * 解決済み設定から KnowledgeGraphMCPConfig を生成
+ */
+export function resolvedConfigToMcpConfig(resolved: ResolvedConfig, storagePath: string): KnowledgeGraphMCPConfig {
+  return {
+    storagePath,
+    storageType: 'file-git',
+    versionControlMode: resolved.versionControlMode,
+    writePermission: resolved.writePermission,
+    contextRoots: resolved.contextRoots
+  }
 }

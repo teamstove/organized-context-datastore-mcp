@@ -13,7 +13,7 @@
 import type { IKnowledgeStore } from './IKnowledgeStore.js'
 import { KnowledgeStoreError } from './IKnowledgeStore.js'
 import type { FileMetadata, VersionEntry, ContextRootConfig } from '../types/index.js'
-import { FileGitStore, type FileGitStoreConfig } from './FileGitStore.js'
+import { FileGitStore, type FileGitStoreConfig, type GitMode } from './FileGitStore.js'
 import { PostgresStore, type PostgresStoreConfig } from './PostgresStore.js'
 
 /**
@@ -32,7 +32,15 @@ export interface CompositeStoreConfig {
   /** デフォルト postgres 接続文字列 */
   defaultConnectionString?: string
   
-  /** バージョン管理モード */
+  /**
+   * デフォルト Git モード（Context Root で指定がない場合に使用）
+   * デフォルト: 'manual'
+   */
+  defaultGitMode?: GitMode
+  
+  /**
+   * @deprecated git: 'auto-commit' を使用してください
+   */
   autoCommit?: boolean
 }
 
@@ -96,6 +104,35 @@ export class CompositeStore implements IKnowledgeStore {
   }
   
   /**
+   * Git モードを解決
+   * 
+   * readOnly なら 'none'、そうでなければ contextRoot の設定 → デフォルト設定 → 'manual'
+   */
+  private resolveGitMode(contextRoot: ContextRootConfig): GitMode {
+    // readOnly な Context Root は Git 操作しない
+    if (contextRoot.readOnly) {
+      return 'none'
+    }
+    
+    // 優先順位: contextRoot.git → config.defaultGitMode → config.autoCommit (後方互換) → 'manual'
+    if (contextRoot.git) {
+      return contextRoot.git
+    }
+    
+    if (this.config.defaultGitMode) {
+      return this.config.defaultGitMode
+    }
+    
+    // 後方互換: autoCommit が設定されていれば変換
+    if (this.config.autoCommit === true) {
+      return 'auto-commit'
+    }
+    
+    // デフォルトは 'manual'
+    return 'manual'
+  }
+  
+  /**
    * Context Root 用のストアを作成
    */
   private createStoreForContextRoot(contextRoot: ContextRootConfig): IKnowledgeStore | null {
@@ -108,10 +145,13 @@ export class CompositeStore implements IKnowledgeStore {
         return null
       }
       
+      const gitMode = this.resolveGitMode(contextRoot)
+      
       return new FileGitStore({
         rootPath: storagePath,
-        useGit: true,
-        autoCommit: this.config.autoCommit ?? false
+        git: gitMode,
+        ignorePatterns: contextRoot.ignorePatterns,
+        includePatterns: contextRoot.includePatterns
       })
     }
     

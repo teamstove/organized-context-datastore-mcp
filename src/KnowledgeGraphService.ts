@@ -47,7 +47,8 @@ export class KnowledgeGraphService {
     
     const writeConfig: WriteToolsConfig = {
       versionControlMode: config.versionControlMode,
-      writePermission: config.writePermission
+      writePermission: config.writePermission,
+      contextRoots: config.contextRoots
     }
     this.writeTools = new WriteTools(this.store, writeConfig)
   }
@@ -63,6 +64,9 @@ export class KnowledgeGraphService {
       root => root.storageType !== undefined
     )
     
+    // versionControlMode → git モードの変換（後方互換）
+    const defaultGitMode = config.versionControlMode === 'immediate' ? 'auto-commit' as const : 'manual' as const
+    
     // 個別ストレージ設定がある場合は CompositeStore を使用
     if (hasIndividualStorage) {
       console.log('[KnowledgeGraphService] CompositeStore を使用 (Context Root 個別ストレージ)')
@@ -72,7 +76,7 @@ export class KnowledgeGraphService {
         defaultStorageType: config.storageType,
         defaultStoragePath: config.storagePath,
         defaultConnectionString: config.connectionString,
-        autoCommit: config.versionControlMode === 'immediate'
+        defaultGitMode
       })
     }
     
@@ -80,8 +84,7 @@ export class KnowledgeGraphService {
     if (config.storageType === 'file-git') {
       return new FileGitStore({
         rootPath: config.storagePath,
-        useGit: true,
-        autoCommit: config.versionControlMode === 'immediate'
+        git: defaultGitMode
       })
     }
     

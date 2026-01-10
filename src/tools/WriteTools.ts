@@ -17,9 +17,13 @@ import type {
   VersionControlMode,
   ContextMutation,
   MutationResult,
-  MutationOperationResult
+  MutationOperationResult,
+  ContextRootConfig
 } from '../types/index.js'
 import { parseMarkdown, toContextNode } from '../parser/MarkdownParser.js'
+
+/** システムデフォルトの拡張子 */
+const SYSTEM_DEFAULT_EXTENSION = '.md'
 
 /**
  * 書き込みツール設定
@@ -30,6 +34,9 @@ export interface WriteToolsConfig {
   
   /** 書き込み権限 */
   writePermission: WritePermissionConfig
+  
+  /** Context Roots 設定 (defaultExtension 取得用) */
+  contextRoots?: ContextRootConfig[]
 }
 
 /**
@@ -95,7 +102,8 @@ export class WriteTools {
               summary: op.summary,
               content: op.content,
               categories: op.categories,
-              tags: op.tags
+              tags: op.tags,
+              extension: op.extension
             })
             
             results.push({
@@ -196,10 +204,18 @@ export class WriteTools {
    * 単一コンテキスト作成 (コミットなし)
    */
   private async createContextSingle(params: CreateContextParams): Promise<{ path: string; node: ContextNode }> {
-    const { parentPath, title, summary, content = '', categories = [], tags = [] } = params
+    const { parentPath, title, summary, content = '', categories = [], tags = [], extension } = params
     
     const slug = this.slugify(title)
-    const path = `${parentPath}/${slug}`
+    
+    // 拡張子を決定: 明示指定 > Context Root のデフォルト > システムデフォルト
+    const resolvedExtension = this.resolveExtension(parentPath, extension)
+    
+    // スラッグに拡張子を付与してパスを構成
+    // 注: store.write は内部で .md を付与するので、ここでは拡張子なしのパスを使用
+    // ただし、.context.md のような複合拡張子の場合は .md を除いた部分をスラッグに含める
+    const slugWithExtension = this.buildSlugWithExtension(slug, resolvedExtension)
+    const path = `${parentPath}/${slugWithExtension}`
     
     this.checkWritePermission(path)
     
@@ -212,6 +228,59 @@ export class WriteTools {
     
     const node = await this.loadContextNode(path)
     return { path, node }
+  }
+  
+  /**
+   * 拡張子を決定
+   * 
+   * 優先順位:
+   * 1. 明示的に指定された extension
+   * 2. Context Root の defaultExtension
+   * 3. システムデフォルト (.md)
+   */
+  private resolveExtension(parentPath: string, explicitExtension?: string): string {
+    // 1. 明示的に指定されていればそれを使用
+    if (explicitExtension) {
+      return explicitExtension.startsWith('.') ? explicitExtension : `.${explicitExtension}`
+    }
+    
+    // 2. Context Root の defaultExtension を探す
+    const contextRoots = this.config.contextRoots ?? []
+    for (const root of contextRoots) {
+      // parentPath がこの Context Root 配下かどうか
+      if (parentPath === root.path || parentPath.startsWith(root.path + '/')) {
+        if (root.defaultExtension) {
+          return root.defaultExtension.startsWith('.') 
+            ? root.defaultExtension 
+            : `.${root.defaultExtension}`
+        }
+      }
+    }
+    
+    // 3. システムデフォルト
+    return SYSTEM_DEFAULT_EXTENSION
+  }
+  
+  /**
+   * スラッグに拡張子情報を付与
+   * 
+   * - .md の場合: slug のまま（store.write が .md を付与）
+   * - .context.md の場合: slug.context（store.write が .md を付与して slug.context.md になる）
+   */
+  private buildSlugWithExtension(slug: string, extension: string): string {
+    if (extension === '.md') {
+      return slug
+    }
+    
+    // .context.md → .context 部分を抽出してスラッグに付与
+    if (extension.endsWith('.md')) {
+      const prefix = extension.slice(0, -3) // ".context.md" → ".context"
+      return `${slug}${prefix}`
+    }
+    
+    // .md 以外の拡張子は現在未サポート（将来対応）
+    console.warn(`[WriteTools] Unsupported extension: ${extension}, using .md`)
+    return slug
   }
   
   /**

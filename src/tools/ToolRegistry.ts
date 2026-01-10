@@ -1,0 +1,426 @@
+/**
+ * Tool Registry
+ * 
+ * サーバーモードに応じてMCPツールを動的に構成・登録
+ */
+
+import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { z } from 'zod'
+import type { KnowledgeGraphService } from '../KnowledgeGraphService.js'
+import type { ServerMode } from '../types/index.js'
+
+// =============================================================================
+// Zod Schemas
+// =============================================================================
+
+/**
+ * ContentUpdate スキーマ
+ */
+export const ContentUpdateSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('whole_replace'),
+    content: z.string().describe('新しいコンテンツ全体')
+  }),
+  z.object({
+    type: z.literal('regexp_replace'),
+    pattern: z.string().describe('正規表現パターン'),
+    replacement: z.string().describe('置換文字列 ($1, $2 等のグループ参照可)'),
+    flags: z.string().optional().describe('正規表現フラグ (g, i, m, s)')
+  })
+])
+
+/**
+ * ContextMutation スキーマ (統合版)
+ */
+export const ContextMutationSchema = z.object({
+  type: z.enum(['create', 'update', 'delete', 'move']).describe('操作タイプ'),
+  path: z.string().describe('対象パス (create: 親パス, update/delete: 対象パス, move: 移動元)'),
+  to: z.string().optional().describe('移動先パス (move 時のみ)'),
+  title: z.string().optional().describe('タイトル (create時必須)'),
+  summary: z.string().optional().describe('サマリ (create時必須)'),
+  categories: z.array(z.string()).optional().describe('カテゴリ'),
+  tags: z.array(z.string()).optional().describe('タグ'),
+  content: z.string().optional().describe('初期コンテンツ (create 時のみ)'),
+  contentUpdates: z.array(ContentUpdateSchema).optional().describe('コンテンツ更新操作 (update 時のみ)')
+})
+
+// =============================================================================
+// Service Resolver
+// =============================================================================
+
+/**
+ * サービス解決関数の型
+ * 
+ * - local-dev モード: cwd から動的にサービスを解決
+ * - remote-server モード: 固定のサービスを返す
+ */
+export type ServiceResolver = (cwd?: string) => Promise<KnowledgeGraphService>
+
+// =============================================================================
+// Tool Registration
+// =============================================================================
+
+/**
+ * ツールを登録
+ * 
+ * @param server MCP サーバー
+ * @param mode サーバーモード
+ * @param resolveService サービス解決関数
+ */
+export function registerTools(
+  server: McpServer,
+  mode: ServerMode,
+  resolveService: ServiceResolver
+): void {
+  // 読み取りツールは常に登録
+  registerReadTools(server, mode, resolveService)
+  
+  // 書き込みツールは readonly でなければ登録
+  if (!mode.readonly) {
+    registerWriteTools(server, mode, resolveService)
+  }
+}
+
+// =============================================================================
+// Read Tools
+// =============================================================================
+
+/**
+ * 読み取り系ツールを登録
+ */
+function registerReadTools(
+  server: McpServer,
+  mode: ServerMode,
+  resolveService: ServiceResolver
+): void {
+  const isLocalDev = mode.type === 'local-dev'
+  
+  // cwd パラメータのスキーマ（local-dev モードのみ必須）
+  const cwdSchema = isLocalDev
+    ? { cwd: z.string().describe('作業ディレクトリ（設定探索の起点）') }
+    : {}
+  
+  // -------------------------------------------------------------------------
+  // list_context_roots
+  // -------------------------------------------------------------------------
+  server.tool(
+    'list_context_roots',
+    isLocalDev
+      ? 'Context Root一覧を取得します（cwd から設定を探索）'
+      : 'Context Root一覧を取得します',
+    cwdSchema,
+    async (args) => {
+      try {
+        const service = await resolveService(isLocalDev ? (args as { cwd: string }).cwd : undefined)
+        const roots = await service.listContextRoots()
+        
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(roots, null, 2)
+          }]
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: ${(error as Error).message}`
+          }],
+          isError: true
+        }
+      }
+    }
+  )
+  
+  // -------------------------------------------------------------------------
+  // get_contexts
+  // -------------------------------------------------------------------------
+  const getContextsSchema = {
+    ...cwdSchema,
+    patterns: z.array(z.string()).describe('取得するコンテキストのglob パターン配列 (例: ["project/**", "docs/*"])'),
+    filter: z.string().optional().describe('jq フィルタ式 (例: \'.categories | any(. == "feature-spec")\')'),
+    includeContent: z.boolean().optional().describe('コンテンツを含めるか (default: true)')
+  }
+  
+  server.tool(
+    'get_contexts',
+    `パターンとフィルタでコンテキストを取得します。
+
+## パラメータ
+- patterns: glob パターン配列 (例: ['project/**', 'docs/*'])
+- filter: jq フィルタ式 (例: '.categories | any(. == "feature-spec")')
+- includeContent: コンテンツを含めるか (default: true)
+${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''}
+
+## jq フィルタ例
+- カテゴリでフィルタ: '.categories | any(. == "feature-spec")'
+- タグでフィルタ: '.tags | any(. == "Phase1")'
+- 未完了TODOがあるもの: '.todos | any(.completed == false)'`,
+    getContextsSchema,
+    async (args) => {
+      try {
+        const typedArgs = args as { cwd?: string; patterns: string[]; filter?: string; includeContent?: boolean }
+        const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
+        const contexts = await service.getContexts({
+          patterns: typedArgs.patterns,
+          filter: typedArgs.filter,
+          includeContent: typedArgs.includeContent
+        })
+        
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(contexts, null, 2)
+          }]
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: ${(error as Error).message}`
+          }],
+          isError: true
+        }
+      }
+    }
+  )
+  
+  // -------------------------------------------------------------------------
+  // get_context_tree
+  // -------------------------------------------------------------------------
+  const getContextTreeSchema = {
+    ...cwdSchema,
+    rootPath: z.string().optional().describe('ルートパス（単一）'),
+    rootPaths: z.array(z.string()).optional().describe('ルートパス配列（複数一括取得）'),
+    depth: z.number().optional().describe('深さ制限 (省略時は全階層)'),
+    format: z.enum(['tree-text', 'json']).optional().describe("出力形式 (default: 'tree-text')"),
+    treeStyle: z.enum(['nested', 'flat']).optional().describe("ツリースタイル (default: 'flat')"),
+    includeSummary: z.boolean().optional().describe('summary を含めるか (default: true)'),
+    includeCategories: z.boolean().optional().describe('categories を含めるか (default: true)'),
+    includeTags: z.boolean().optional().describe('tags を含めるか (default: true)'),
+    maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)')
+  }
+  
+  server.tool(
+    'get_context_tree',
+    `コンテキストツリー(目次)を取得します。
+
+## フォーマット
+- tree-text (default): Token効率の良いテキストツリー形式
+- json: 従来のJSON配列形式
+
+## ツリースタイル (tree-text のみ)
+- flat (default): フルパス表記（階層なし）
+- nested: ネスト形式（ツリー記号で階層表示）
+${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}`,
+    getContextTreeSchema,
+    async (args) => {
+      try {
+        const typedArgs = args as {
+          cwd?: string
+          rootPath?: string
+          rootPaths?: string[]
+          depth?: number
+          format?: 'tree-text' | 'json'
+          treeStyle?: 'nested' | 'flat'
+          includeSummary?: boolean
+          includeCategories?: boolean
+          includeTags?: boolean
+          maxNodes?: number
+        }
+        const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
+        const result = await service.getContextTree({
+          rootPath: typedArgs.rootPath,
+          rootPaths: typedArgs.rootPaths,
+          depth: typedArgs.depth,
+          format: typedArgs.format,
+          treeStyle: typedArgs.treeStyle,
+          includeSummary: typedArgs.includeSummary,
+          includeCategories: typedArgs.includeCategories,
+          includeTags: typedArgs.includeTags,
+          maxNodes: typedArgs.maxNodes
+        })
+        
+        // tree-text 形式の場合はそのまま返す
+        if ('format' in result && result.format === 'tree-text') {
+          return {
+            content: [{
+              type: 'text' as const,
+              text: result.tree as string
+            }]
+          }
+        }
+        
+        // JSON 形式または複数結果の場合
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(result, null, 2)
+          }]
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: ${(error as Error).message}`
+          }],
+          isError: true
+        }
+      }
+    }
+  )
+  
+  // -------------------------------------------------------------------------
+  // search_contexts
+  // -------------------------------------------------------------------------
+  const searchContextsSchema = {
+    ...cwdSchema,
+    query: z.string().describe('検索クエリ'),
+    scope: z.array(z.string()).optional().describe('検索スコープ (glob パターン)')
+  }
+  
+  server.tool(
+    'search_contexts',
+    `キーワードでコンテキストを検索します${isLocalDev ? '（cwd から設定を探索）' : ''}`,
+    searchContextsSchema,
+    async (args) => {
+      try {
+        const typedArgs = args as { cwd?: string; query: string; scope?: string[] }
+        const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
+        const results = await service.searchContexts(
+          typedArgs.query,
+          typedArgs.scope
+        )
+        
+        return {
+          content: [{
+            type: 'text' as const,
+            text: JSON.stringify(results, null, 2)
+          }]
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: ${(error as Error).message}`
+          }],
+          isError: true
+        }
+      }
+    }
+  )
+}
+
+// =============================================================================
+// Write Tools
+// =============================================================================
+
+/**
+ * 書き込み系ツールを登録
+ */
+function registerWriteTools(
+  server: McpServer,
+  mode: ServerMode,
+  resolveService: ServiceResolver
+): void {
+  const isLocalDev = mode.type === 'local-dev'
+  
+  // cwd パラメータのスキーマ（local-dev モードのみ必須）
+  const cwdSchema = isLocalDev
+    ? { cwd: z.string().describe('作業ディレクトリ（設定探索の起点）') }
+    : {}
+  
+  // -------------------------------------------------------------------------
+  // mutate_context (統合版: create/update/delete/move)
+  // -------------------------------------------------------------------------
+  const mutateContextSchema = {
+    ...cwdSchema,
+    operations: z.array(ContextMutationSchema).describe('変更操作の配列')
+  }
+  
+  server.tool(
+    'mutate_context',
+    `コンテキストを変更します (統合版: create/update/delete/move を一括実行)
+
+全ての書き込み操作を単一のツールで実行可能。
+複数の操作を配列で渡すことで一括処理できます。
+${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}
+
+## 操作タイプ
+
+| type   | 必須フィールド              | オプション                                |
+|--------|---------------------------|------------------------------------------|
+| create | path (親), title, summary | categories, tags, content                |
+| update | path                      | title, summary, categories, tags, contentUpdates |
+| delete | path                      | -                                        |
+| move   | path (元), to             | -                                        |
+
+## contentUpdates の操作タイプ
+
+### whole_replace - コンテンツ全置換
+{ type: 'whole_replace', content: '新しいコンテンツ全体' }
+
+### regexp_replace - 正規表現置換
+pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
+    mutateContextSchema,
+    async (args) => {
+      try {
+        const typedArgs = args as { cwd?: string; operations: Parameters<KnowledgeGraphService['mutateContext']>[0] }
+        const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
+        const result = await service.mutateContext(typedArgs.operations)
+        
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Success: ${result.success}, Errors: ${result.errors}\n\n${JSON.stringify(result.results, null, 2)}`
+          }]
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: ${(error as Error).message}`
+          }],
+          isError: true
+        }
+      }
+    }
+  )
+  
+  // -------------------------------------------------------------------------
+  // commit (draft_commit モード用)
+  // -------------------------------------------------------------------------
+  const commitSchema = {
+    ...cwdSchema,
+    message: z.string().describe('コミットメッセージ'),
+    paths: z.array(z.string()).optional().describe('対象パス (省略時は全変更)')
+  }
+  
+  server.tool(
+    'commit',
+    `変更をコミットします (draft_commitモード用)${isLocalDev ? '（cwd から設定を探索）' : ''}`,
+    commitSchema,
+    async (args) => {
+      try {
+        const typedArgs = args as { cwd?: string; message: string; paths?: string[] }
+        const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
+        const hash = await service.commit(typedArgs.message, typedArgs.paths)
+        
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Committed: ${hash}\nMessage: ${typedArgs.message}`
+          }]
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: 'text' as const,
+            text: `Error: ${(error as Error).message}`
+          }],
+          isError: true
+        }
+      }
+    }
+  )
+}

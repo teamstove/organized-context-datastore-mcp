@@ -265,6 +265,14 @@ export interface CreateContextParams {
   
   /** タグ (オプション) */
   tags?: string[]
+  
+  /**
+   * ファイル拡張子 (オプション)
+   * 
+   * 例: ".md", ".context.md"
+   * 省略時は Context Root の defaultExtension → システムデフォルト (.md)
+   */
+  extension?: string
 }
 
 // =============================================================================
@@ -455,6 +463,19 @@ export interface ContextMutation {
    * 複数指定可、順番に適用される
    */
   contentUpdates?: ContentUpdate[]
+  
+  // ==========================================================================
+  // ファイル設定 (create)
+  // ==========================================================================
+  
+  /**
+   * ファイル拡張子 (create 時のみ)
+   * 
+   * 例: ".md", ".context.md"
+   * 
+   * 省略時は Context Root の defaultExtension → システムデフォルト (.md) が使用される
+   */
+  extension?: string
 }
 
 /**
@@ -659,6 +680,57 @@ export interface ContextRootConfig {
   readOnly?: boolean
   
   // ==========================================================================
+  // ファイルフィルタリング
+  // ==========================================================================
+  
+  /**
+   * 除外パターン (glob 形式)
+   * 
+   * デフォルトで以下が除外される:
+   * - .git, node_modules, dist, build, .cache, coverage など
+   * 
+   * 追加パターン例: ['*.test.md', 'drafts/**']
+   * 
+   * デフォルト除外を解除する場合: ['!node_modules'] で node_modules を対象に含める
+   */
+  ignorePatterns?: string[]
+  
+  /**
+   * 対象ファイルパターン (glob 形式)
+   * 
+   * 例: "**\/*.context.md" または "**\/*.md"
+   * 
+   * デフォルト: "**\/*.md"
+   * 指定した場合、このパターンにマッチするファイルのみが Context として認識される
+   */
+  includePatterns?: string[]
+  
+  /**
+   * 新規作成時のデフォルト拡張子
+   * 
+   * 例: ".md", ".context.md"
+   * 
+   * デフォルト: ".md"
+   * mutate_context で create する際、明示的に extension を指定しなければこの値が使われる
+   */
+  defaultExtension?: string
+  
+  // ==========================================================================
+  // Git 設定
+  // ==========================================================================
+  
+  /**
+   * Git コミット設定
+   * 
+   * - 'auto-commit': 各操作後に自動コミット
+   * - 'manual': commit ツールで明示的にコミット（デフォルト）
+   * - 'none': Git を使用しない
+   * 
+   * readOnly: true の場合はこの設定は無視される（書き込みしないため）
+   */
+  git?: 'auto-commit' | 'manual' | 'none'
+  
+  // ==========================================================================
   // 個別ストレージ設定 (省略時は親プロジェクトの設定を継承)
   // ==========================================================================
   
@@ -683,4 +755,127 @@ export interface ContextRootConfig {
    * - "${KGMCP_PG_CONNECTION_STRING}" -> 環境変数を展開
    */
   connectionString?: string
+}
+
+// =============================================================================
+// Server Mode Types
+// =============================================================================
+
+/**
+ * サーバー起動モード
+ * 
+ * - local-dev: 開発者のPC上で起動、cwd パラメータで動的に設定を探索
+ * - remote-server: サーバー上で常駐、設定ファイルで固定された Context Root を提供
+ */
+export type ServerModeType = 'local-dev' | 'remote-server'
+
+/**
+ * サーバーモード設定
+ */
+export interface ServerMode {
+  /** モードタイプ */
+  type: ServerModeType
+  
+  /** 読み取り専用モード（書き込みツールを無効化） */
+  readonly: boolean
+}
+
+/**
+ * グローバル設定ファイル (~/.ocd/config.json)
+ */
+export interface GlobalConfig {
+  /** グローバル Context Roots（全プロジェクトで共有） */
+  globalContextRoots?: GlobalContextRootConfig[]
+}
+
+/**
+ * グローバル Context Root 設定
+ */
+export interface GlobalContextRootConfig {
+  /** ID */
+  id: string
+  
+  /** 表示名 */
+  name: string
+  
+  /** 絶対パス */
+  path: string
+  
+  /** 説明 */
+  description?: string
+  
+  /** 読み取り専用フラグ（デフォルト: true） */
+  readOnly?: boolean
+  
+  /** 除外パターン (glob 形式) */
+  ignorePatterns?: string[]
+  
+  /** 対象ファイルパターン (glob 形式, デフォルト: **\/*.md) */
+  includePatterns?: string[]
+  
+  /** Git コミット設定 ('auto-commit' | 'manual' | 'none') */
+  git?: 'auto-commit' | 'manual' | 'none'
+}
+
+/**
+ * ローカル設定ファイル (.ocd.config.json)
+ */
+export interface LocalConfig {
+  /** Context Roots（相対パスまたは絶対パス） */
+  contextRoots?: LocalContextRootConfig[]
+  
+  /** グローバル設定を継承するか（デフォルト: true） */
+  inheritGlobal?: boolean
+  
+  /** バージョン管理モード */
+  versionControlMode?: VersionControlMode
+  
+  /** 書き込み権限設定 */
+  writePermission?: WritePermissionConfig
+}
+
+/**
+ * ローカル Context Root 設定
+ */
+export interface LocalContextRootConfig {
+  /** ID（省略時はパスから生成） */
+  id?: string
+  
+  /** 表示名（省略時はパスから生成） */
+  name?: string
+  
+  /** パス（相対パスまたは絶対パス） */
+  path: string
+  
+  /** 説明 */
+  description?: string
+  
+  /** 読み取り専用フラグ */
+  readOnly?: boolean
+  
+  /** 除外パターン (glob 形式) */
+  ignorePatterns?: string[]
+  
+  /** 対象ファイルパターン (glob 形式, デフォルト: **\/*.md) */
+  includePatterns?: string[]
+  
+  /** Git コミット設定 ('auto-commit' | 'manual' | 'none') */
+  git?: 'auto-commit' | 'manual' | 'none'
+}
+
+/**
+ * 解決済み設定（cwd からの探索 + グローバルマージ後）
+ */
+export interface ResolvedConfig {
+  /** 設定ファイルのパス（見つかった場合） */
+  configPath?: string
+  
+  /** 解決済み Context Roots */
+  contextRoots: ContextRootConfig[]
+  
+  /** バージョン管理モード */
+  versionControlMode: VersionControlMode
+  
+  /** 書き込み権限設定 */
+  writePermission: WritePermissionConfig
 }
