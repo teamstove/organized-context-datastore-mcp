@@ -1,16 +1,33 @@
 ---
-title: Knowledge Graph MCP
-summary: LLM向けに最適化されたMarkdownベースのナレッジグラフ管理システム
+title: Organized Context Datastore MCP
+summary: LLM向けに最適化されたMarkdownベースのコンテキスト管理システム
 categories:
   - overview
 tags:
   - root
 ---
-# Knowledge Graph MCP
+# Organized Context Datastore MCP
 
-LLM向けに最適化されたMarkdownベースのナレッジグラフ管理システム。
+LLM向けに最適化されたMarkdownベースのコンテキスト管理システム。
 
-## ツール一覧 (7個)
+## クイックスタート
+
+### Cursor / Claude Desktop 設定
+
+```json
+{
+  "mcpServers": {
+    "ocd-mcp": {
+      "command": "npx",
+      "args": ["github:teamstove/organized-context-datastore-mcp"]
+    }
+  }
+}
+```
+
+設定を追加するだけで OK！
+
+## ツール一覧 (6個)
 
 | ツール | 説明 |
 |--------|------|
@@ -20,13 +37,6 @@ LLM向けに最適化されたMarkdownベースのナレッジグラフ管理シ
 | `search_contexts` | キーワード検索 |
 | **`mutate_context`** | **統合書き込み (create/update/delete/move)** |
 | `commit` | draft_commit モード用 |
-
-## クイックスタート
-
-```bash
-# MCP サーバー起動
-npx tsx src/mcp-server.ts --storage /path/to/knowledge-base
-```
 
 ## ドキュメント構造
 
