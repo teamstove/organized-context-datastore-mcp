@@ -14,47 +14,44 @@ tags:
 
 ```
 ┌─────────────────────────────────────────────┐
-│             MCP Client (LLM)                │
+│             MCP Client (Cursor / Claude)        │
 └──────────────────────┬──────────────────────┘
-                       │ MCP Protocol (stdio / HTTP)
-┌──────────────────────┼──────────────────────┐
-│             MCP Server Layer                │
-│  ─ mcp-server.ts                            │
-│  ─ ツール定義とルーティング                   │
+                       │ MCP Protocol
+           ┌──────────┴──────────┐
+           │                     │
+     stdio (default)        HTTP (--http)
+           │                     │
+┌──────────┴──────────┬─────┴─────────────┐
+│             MCP Server Layer                    │
+│  ─ cli.ts + mcp-server.ts                      │
+│  ─ ToolRegistry (モード別ツール登録)               │
 └──────────────────────┬──────────────────────┘
                        │
-┌──────────────────────┼──────────────────────┐
-│          KnowledgeGraphService              │
-│  ─ ビジネスロジックの中心                       │
-│  → src/KnowledgeGraphService.ts            │
-└───────┬───────────────┴───────────┬───────────┘
-        │                       │
-┌───────┴───────────┐   ┌───────┴───────────┐
-│   ReadTools      │   │   WriteTools      │
-│ → tools/         │   │ → tools/         │
-└───────┬───────────┘   └───────┬───────────┘
-        │                       │
-        └───────────┬───────────┘
-                    │
-┌───────────────────┼───────────────────┐
-│     IKnowledgeStore (Interface)       │
-│ → storage/IKnowledgeStore.ts          │
-└───────┬───────────┬───────┬───────────┘
-        │           │       │
-    ┌───┴───┐  ┌───┴───┐  ┌───┴──────┐
-    │FileGit│  │Postgres│  │Composite │
-    │Store  │  │Store   │  │Store     │
-    └───────┘  └────────┘  └──────────┘
+┌──────────────────────┴──────────────────────┐
+│          KnowledgeGraphService                  │
+│  ─ ビジネスロジックの中心                           │
+│  → src/KnowledgeGraphService.ts                │
+└──────────┬─────────────────────┬────────────┘
+           │                     │
+┌──────────┴───────────┐   ┌───┴────────────┐
+│   ConfigLoader      │   │   FileGitStore   │
+│ → config/           │   │ → storage/       │
+└──────────────────────┘   └──────────────────┘
 ```
 
 ## データフロー
 
-1. **読み取りフロー**: Client → MCP Server → ReadTools → Store → Markdown解析
-2. **書き込みフロー**: Client → MCP Server → WriteTools → Store → Git commit / DB insert
+1. **読み取りフロー**: Client → MCP Server → Service → Store → Markdown解析
+2. **書き込みフロー**: Client → MCP Server → Service → Store → Git commit
 
 ## 主要ファイル
-- `src/KnowledgeGraphService.ts` - メインサービス
-- `src/mcp-server.ts` - MCPプロトコル実装
-- `src/tools/ReadTools.ts` - 読み取り操作
-- `src/tools/WriteTools.ts` - 書き込み操作
-- `src/storage/` - ストレージ実装
+
+| ファイル | 役割 |
+|--------|------|
+| `src/cli.ts` | CLI エントリポイント |
+| `src/mcp-server.ts` | MCP サーバーファクトリ |
+| `src/KnowledgeGraphService.ts` | メインサービス |
+| `src/tools/ToolRegistry.ts` | ツール登録 |
+| `src/config/ConfigLoader.ts` | 設定探索・マージ |
+| `src/storage/FileGitStore.ts` | ストレージ実装 |
+| `src/http/HttpMcpServer.ts` | HTTP サーバー |
