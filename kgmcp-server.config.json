@@ -1,0 +1,61 @@
+{
+  "port": 3000,
+  "host": "0.0.0.0",
+  "projects": [
+    {
+      "id": "kgmcp-context-test",
+      "name": "KGMCP Context Test",
+      "storageType": "file-git",
+      "storagePath": "/Applications/MAMP/htdocs/TAIRIKUT/TAIRIKUT_CORE/CORE/COREFW_AI_WORKFLOWS/KGMCP_CONTEXT_TEST",
+      "contextRoots": [
+        {
+          "id": "apiste-gme",
+          "name": "Apiste GME Project",
+          "path": "apiste-gme",
+          "description": "GMEプロジェクトの Knowledge Base"
+        },
+        {
+          "id": "core-framework",
+          "name": "CORE Framework",
+          "path": "core-framework",
+          "description": "CORE Framework のドキュメント",
+          "readOnly": true
+        }
+      ],
+      "writePermission": {
+        "mode": "unrestricted"
+      }
+    },
+    {
+      "id": "mixed-storage-project",
+      "name": "Mixed Storage Project (File + DB)",
+      "storageType": "file-git",
+      "storagePath": "/path/to/default-repo",
+      "contextRoots": [
+        {
+          "id": "docs",
+          "name": "Documentation (Git)",
+          "path": "docs",
+          "description": "Git で管理されるドキュメント",
+          "storageType": "file-git",
+          "storagePath": "/path/to/docs-repo"
+        },
+        {
+          "id": "dynamic-data",
+          "name": "Dynamic Data (PostgreSQL)",
+          "path": "dynamic-data",
+          "description": "PostgreSQL で管理される動的データ",
+          "storageType": "postgres",
+          "connectionString": "${KGMCP_PG_CONNECTION_STRING}"
+        }
+      ],
+      "writePermission": {
+        "mode": "unrestricted"
+      }
+    }
+  ],
+  "allowDynamicStorage": true,
+  "allowedStoragePaths": [
+    "/Applications/MAMP/htdocs/TAIRIKUT/**/*"
+  ]
+}

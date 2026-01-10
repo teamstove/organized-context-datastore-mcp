@@ -1,0 +1,62 @@
+{
+  "name": "organized-context-datastore-mcp",
+  "version": "0.1.0",
+  "description": "Organized Context Datastore MCP - 階層構造を持つコンテキストをLLMと人間が共同で読み書きできるMCPサーバー",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "ocd-mcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "prepare": "npm run build",
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "dev": "tsx src/mcp-server.ts",
+    "dev:http": "tsx watch src/http-server.ts"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "glob": "^11.0.0",
+    "gray-matter": "^4.0.3",
+    "simple-git": "^3.27.0",
+    "node-jq": "^6.0.1",
+    "zod": "^3.23.8",
+    "knex": "^3.1.0",
+    "pg": "^8.13.0",
+    "express": "^4.21.0",
+    "cors": "^2.8.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/express": "^5.0.0",
+    "@types/cors": "^2.8.17",
+    "typescript": "^5.0.0",
+    "vitest": "^1.0.0",
+    "tsx": "^4.19.2"
+  },
+  "keywords": [
+    "mcp",
+    "knowledge-graph",
+    "context-management",
+    "ai",
+    "llm"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/teamstove/organized-context-datastore-mcp.git"
+  },
+  "author": "teamstove",
+  "license": "MIT"
+}

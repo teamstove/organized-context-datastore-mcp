@@ -1,0 +1,14 @@
+{
+  "contextRoots": [
+    {
+      "id": "kgmcp-docs",
+      "name": "Knowledge Graph MCP Documentation",
+      "path": ".",
+      "description": "Knowledge Graph MCP パッケージのナレッジベース"
+    }
+  ],
+  "writePermission": {
+    "mode": "unrestricted"
+  },
+  "versionControlMode": "immediate"
+}
