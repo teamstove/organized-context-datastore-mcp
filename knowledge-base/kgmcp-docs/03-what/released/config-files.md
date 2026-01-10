@@ -153,12 +153,6 @@ Context Root 毎に Git コミットの挙動を設定できます。
 2. 見つかった場合はローカル設定を読み込み
 3. `inheritGlobal: true` の場合、グローバル設定とマージ
 
-### ファイル優先順位
-
-```
-.ocd.config.js > .ocd.config.json (後方互換)
-```
-
 ### マージルール
 - ローカル設定の Context Roots が先に追加
 - グローバル設定の Context Roots は、同じ ID がなければ追加

@@ -40,12 +40,9 @@ import type {
 export const CONFIG_FILE_NAME = 'kgmcp.config.json'
 
 /**
- * ローカル設定ファイル名（優先順位順）
+ * ローカル設定ファイル名
  */
-export const LOCAL_CONFIG_FILE_NAMES = [
-  '.ocd.config.js',    // 推奨
-  '.ocd.config.json',  // 後方互換
-] as const
+export const LOCAL_CONFIG_FILE_NAME = '.ocd.config.js'
 
 /**
  * グローバル設定ディレクトリ
@@ -53,12 +50,9 @@ export const LOCAL_CONFIG_FILE_NAMES = [
 export const GLOBAL_CONFIG_DIR = '.ocd'
 
 /**
- * グローバル設定ファイル名（優先順位順）
+ * グローバル設定ファイル名
  */
-export const GLOBAL_CONFIG_FILE_NAMES = [
-  'config.js',   // 推奨
-  'config.json', // 後方互換
-] as const
+export const GLOBAL_CONFIG_FILE_NAME = 'config.js'
 
 /**
  * 設定ファイルの形式
@@ -416,18 +410,9 @@ async function loadConfigFile<T>(filePath: string): Promise<T | null> {
  * @returns グローバル設定（見つからない場合は空オブジェクト）
  */
 export async function loadGlobalConfig(): Promise<GlobalConfig> {
-  const globalConfigDir = path.join(os.homedir(), GLOBAL_CONFIG_DIR)
-  
-  // 優先順位順に探索
-  for (const fileName of GLOBAL_CONFIG_FILE_NAMES) {
-    const configPath = path.join(globalConfigDir, fileName)
-    const config = await loadConfigFile<GlobalConfig>(configPath)
-    if (config) {
-      return config
-    }
-  }
-  
-  return {}
+  const configPath = path.join(os.homedir(), GLOBAL_CONFIG_DIR, GLOBAL_CONFIG_FILE_NAME)
+  const config = await loadConfigFile<GlobalConfig>(configPath)
+  return config ?? {}
 }
 
 /**
@@ -441,14 +426,11 @@ export async function findLocalConfig(cwd: string): Promise<{ config: LocalConfi
   const root = path.parse(currentDir).root
   
   while (currentDir !== root) {
-    // 優先順位順に探索
-    for (const fileName of LOCAL_CONFIG_FILE_NAMES) {
-      const configPath = path.join(currentDir, fileName)
-      const config = await loadConfigFile<LocalConfig>(configPath)
-      
-      if (config) {
-        return { config, configPath }
-      }
+    const configPath = path.join(currentDir, LOCAL_CONFIG_FILE_NAME)
+    const config = await loadConfigFile<LocalConfig>(configPath)
+    
+    if (config) {
+      return { config, configPath }
     }
     
     currentDir = path.dirname(currentDir)
