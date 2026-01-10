@@ -1,6 +1,6 @@
 ---
 title: vision-and-goals
-summary: Knowledge Graph MCP が目指すビジョンと達成目標
+summary: Organized Context Datastore MCP が目指すビジョンと達成目標
 categories:
   - why
   - vision
