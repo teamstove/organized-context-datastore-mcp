@@ -34,7 +34,7 @@ Cursor / Claude Desktop の MCP 設定に追加するだけ！
 | [server-modes](./released/server-modes) | stdio / HTTP トランスポート、readonly オプション |
 | [config-files](./released/config-files) | `.ocd.config.json` と `~/.ocd/config.json` |
 | [context-roots-filter](./released/context-roots-filter) | URL パラメータでフィルタ（HTTP モード） |
-| [ignore-patterns](./released/ignore-patterns) | デフォルトで node_modules 等を除外 |
+| [file-patterns](./released/file-patterns) | 除外パターン、拡張子設定 |
 
 ## ツール一覧 (6個)
 
