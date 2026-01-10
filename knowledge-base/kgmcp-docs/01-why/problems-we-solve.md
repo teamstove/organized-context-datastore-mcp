@@ -1,6 +1,6 @@
 ---
 title: problems-we-solve
-summary: Knowledge Graph MCP が解決する課題とその背景
+summary: Organized Context Datastore MCP が解決する課題とその背景
 categories:
   - why
   - problems
