@@ -1,13 +1,15 @@
 ---
 title: Config Files
-summary: グローバル設定とローカル設定ファイル
+summary: グローバル設定とローカル設定ファイル（JS形式）
 categories:
   - what
   - released
 tags:
   - configuration
   - settings
+  - javascript
 ---
+
 # Config Files
 
 OCD-MCP の設定ファイル体系。
@@ -16,28 +18,37 @@ OCD-MCP の設定ファイル体系。
 
 | ファイル | 場所 | 用途 |
 |---------|------|------|
-| `~/.ocd/config.json` | ホームディレクトリ | グローバル設定（全 PJ 共有） |
-| `.ocd.config.json` | プロジェクトディレクトリ | ローカル設定（PJ 固有） |
+| `~/.ocd/config.js` | ホームディレクトリ | グローバル設定（全 PJ 共有） |
+| `.ocd.config.js` | プロジェクトディレクトリ | ローカル設定（PJ 固有） |
+
+## JS 形式の利点
+
+- ✅ コメントが書ける
+- ✅ 環境変数の参照が可能
+- ✅ 条件分岐が可能
 
 ## グローバル設定
 
-`~/.ocd/config.json`:
+`~/.ocd/config.js`:
 
-```json
-{
-  "globalContextRoots": [
+```javascript
+/**
+ * グローバル設定（全 PJ で共有）
+ */
+export default {
+  globalContextRoots: [
     {
-      "id": "company-docs",
-      "name": "Company Documentation",
-      "path": "/path/to/shared/company-docs",
-      "description": "会社共通のドキュメント",
-      "readOnly": true
+      id: 'company-docs',
+      name: 'Company Documentation',
+      path: '/path/to/shared/company-docs',
+      description: '会社共通のドキュメント',
+      readOnly: true
     },
     {
-      "id": "design-system",
-      "name": "Design System",
-      "path": "/path/to/design-system",
-      "readOnly": true
+      id: 'design-system',
+      name: 'Design System',
+      path: '/path/to/design-system',
+      readOnly: true
     }
   ]
 }
@@ -52,22 +63,52 @@ OCD-MCP の設定ファイル体系。
 | `path` | string | ✓ | 絶対パス |
 | `description` | string | - | 説明 |
 | `readOnly` | boolean | - | 読み取り専用（デフォルト: true） |
-| `git` | string | - | Git 設定 (`'auto-commit'` / `'manual'` / `'none'`) |
+| `git` | string | - | Git 設定 |
 | `ignorePatterns` | string[] | - | 除外パターン |
 | `includePatterns` | string[] | - | 対象パターン |
 
 ## ローカル設定
 
-`.ocd.config.json`:
+`.ocd.config.js`:
 
-```json
-{
-  "contextRoots": [
-    { "path": "./organized-context" },
-    { "path": "./CORE/docs", "name": "CORE Docs", "readOnly": true },
-    { "path": "./CORE/src", "name": "CORE Source", "readOnly": true, "git": "none" }
+```javascript
+/**
+ * OCD-MCP 設定ファイル
+ * 
+ * contextRoots: Context Root の配列
+ *   - path: string (必須)
+ *   - name?: string
+ *   - readOnly?: boolean
+ *   - git?: 'auto-commit' | 'manual' | 'none'
+ *   - ignorePatterns?: string[]
+ *   - defaultExtension?: string
+ * 
+ * inheritGlobal?: boolean (デフォルト: true)
+ */
+export default {
+  contextRoots: [
+    {
+      // プロジェクトのコンテキスト
+      path: './organized-context',
+      git: 'auto-commit'
+    },
+    {
+      // CORE Framework ドキュメント（読み取り専用）
+      path: './CORE/docs',
+      name: 'CORE Docs',
+      readOnly: true
+    },
+    {
+      // ソースコード参照
+      path: './CORE/src',
+      name: 'CORE Source',
+      readOnly: true,
+      ignorePatterns: ['node_modules/**', 'dist/**']
+    }
   ],
-  "inheritGlobal": true
+  
+  // グローバル設定を継承
+  inheritGlobal: true
 }
 ```
 
@@ -103,35 +144,20 @@ Context Root 毎に Git コミットの挙動を設定できます。
 | `'manual'` | `commit` ツールで明示的にコミット（**デフォルト**） |
 | `'none'` | Git を使用しない |
 
-### 例: Context Root 毎の git 設定
-
-```json
-{
-  "contextRoots": [
-    {
-      "path": "./docs",
-      "git": "auto-commit"
-    },
-    {
-      "path": "./shared-context",
-      "git": "manual"
-    },
-    {
-      "path": "./external-lib",
-      "readOnly": true
-    }
-  ]
-}
-```
-
 > **Note**: `readOnly: true` の Context Root は書き込みしないため `git` 設定は無視されます。
 
 ## 設定の探索とマージ
 
 ### 探索順序
-1. cwd から上位に `.ocd.config.json` を探索
+1. cwd から上位に `.ocd.config.js` を探索
 2. 見つかった場合はローカル設定を読み込み
 3. `inheritGlobal: true` の場合、グローバル設定とマージ
+
+### ファイル優先順位
+
+```
+.ocd.config.js > .ocd.config.json (後方互換)
+```
 
 ### マージルール
 - ローカル設定の Context Roots が先に追加
@@ -143,13 +169,13 @@ Context Root 毎に Git コミットの挙動を設定できます。
 ```
 ~/
 ├── .ocd/
-│   └── config.json          # 共有コンテキスト
+│   └── config.js            # 共有コンテキスト
 ├── projects/
 │   ├── project-alpha/
-│   │   ├── .ocd.config.json  # PJ Alpha 固有
+│   │   ├── .ocd.config.js   # PJ Alpha 固有
 │   │   └── ...
 │   └── project-beta/
-│       ├── .ocd.config.json  # PJ Beta 固有
+│       ├── .ocd.config.js   # PJ Beta 固有
 │       └── ...
 ```
 

@@ -861,6 +861,9 @@ export interface LocalContextRootConfig {
   
   /** Git コミット設定 ('auto-commit' | 'manual' | 'none') */
   git?: 'auto-commit' | 'manual' | 'none'
+  
+  /** 新規作成時のデフォルト拡張子 (例: ".md", ".context.md") */
+  defaultExtension?: string
 }
 
 /**

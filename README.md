@@ -91,34 +91,60 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 
 ## 📁 設定ファイル
 
-### グローバル設定 (`~/.ocd/config.json`)
+### グローバル設定 (`~/.ocd/config.js`)
 
 全プロジェクトで共有する Context Roots：
 
-```json
-{
-  "globalContextRoots": [
+```javascript
+/**
+ * グローバル設定（全 PJ で共有）
+ */
+export default {
+  globalContextRoots: [
     {
-      "id": "company-docs",
-      "name": "Company Documentation",
-      "path": "/path/to/shared/docs",
-      "readOnly": true
+      id: 'company-docs',
+      name: 'Company Documentation',
+      path: '/path/to/shared/docs',
+      readOnly: true
     }
   ]
 }
 ```
 
-### ローカル設定 (`.ocd.config.json`)
+### ローカル設定 (`.ocd.config.js`)
 
 プロジェクト固有の設定（cwd から上位に探索）：
 
-```json
-{
-  "contextRoots": [
-    { "path": "./organized-context", "git": "auto-commit" },
-    { "path": "./CORE/docs", "readOnly": true }
+```javascript
+/**
+ * OCD-MCP 設定ファイル
+ * 
+ * contextRoots: Context Root の配列
+ *   - path: string (必須)
+ *   - name?: string
+ *   - readOnly?: boolean
+ *   - git?: 'auto-commit' | 'manual' | 'none'
+ *   - ignorePatterns?: string[]
+ *   - defaultExtension?: string
+ * 
+ * inheritGlobal?: boolean (デフォルト: true)
+ */
+export default {
+  contextRoots: [
+    {
+      // プロジェクトのコンテキスト
+      path: './organized-context',
+      git: 'auto-commit'
+    },
+    {
+      // CORE Framework ドキュメント（読み取り専用）
+      path: './CORE/docs',
+      name: 'CORE Docs',
+      readOnly: true
+    }
   ],
-  "inheritGlobal": true
+  
+  inheritGlobal: true
 }
 ```
 

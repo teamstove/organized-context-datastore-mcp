@@ -4,14 +4,20 @@
  * Organized Context Datastore MCP の設定ファイル読み込みと自動検出
  * 
  * ## 設定ファイル
- * - グローバル設定: ~/.ocd/config.json
- * - ローカル設定: .ocd.config.json (cwd から上位に探索)
- * - レガシー設定: kgmcp.config.json (後方互換性)
+ * - グローバル設定: ~/.ocd/config.js
+ * - ローカル設定: .ocd.config.js (cwd から上位に探索)
+ * - レガシー設定: .ocd.config.json, kgmcp.config.json (後方互換性)
+ * 
+ * ## JS 形式の利点
+ * - コメントが書ける
+ * - 環境変数の参照が可能
+ * - 条件分岐が可能
  */
 
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import * as os from 'node:os'
+import { pathToFileURL } from 'node:url'
 import type { 
   KnowledgeGraphMCPConfig, 
   ContextRootConfig,
@@ -29,14 +35,17 @@ import type {
 // =============================================================================
 
 /**
- * 設定ファイル名
+ * 設定ファイル名（レガシー）
  */
 export const CONFIG_FILE_NAME = 'kgmcp.config.json'
 
 /**
- * ローカル設定ファイル名
+ * ローカル設定ファイル名（優先順位順）
  */
-export const LOCAL_CONFIG_FILE_NAME = '.ocd.config.json'
+export const LOCAL_CONFIG_FILE_NAMES = [
+  '.ocd.config.js',    // 推奨
+  '.ocd.config.json',  // 後方互換
+] as const
 
 /**
  * グローバル設定ディレクトリ
@@ -44,9 +53,12 @@ export const LOCAL_CONFIG_FILE_NAME = '.ocd.config.json'
 export const GLOBAL_CONFIG_DIR = '.ocd'
 
 /**
- * グローバル設定ファイル名
+ * グローバル設定ファイル名（優先順位順）
  */
-export const GLOBAL_CONFIG_FILE_NAME = 'config.json'
+export const GLOBAL_CONFIG_FILE_NAMES = [
+  'config.js',   // 推奨
+  'config.json', // 後方互換
+] as const
 
 /**
  * 設定ファイルの形式
@@ -353,19 +365,69 @@ export async function loadConfig(storagePath: string): Promise<KnowledgeGraphMCP
 // =============================================================================
 
 /**
+ * 設定ファイルを読み込む（JS または JSON）
+ * 
+ * @param filePath ファイルパス
+ * @returns 設定オブジェクト
+ */
+async function loadConfigFile<T>(filePath: string): Promise<T | null> {
+  try {
+    await fs.access(filePath)
+  } catch {
+    return null
+  }
+  
+  if (filePath.endsWith('.js') || filePath.endsWith('.cjs') || filePath.endsWith('.mjs')) {
+    // JS ファイルは動的 import
+    // キャッシュを回避するためにタイムスタンプを追加
+    const fileUrl = pathToFileURL(filePath).href
+    const module = await import(`${fileUrl}?t=${Date.now()}`)
+    
+    // ESModule (export default) と CommonJS (module.exports) の両方に対応
+    // module.default が存在すれば ESModule
+    // そうでなければ CommonJS (module 自体がエクスポート)
+    if (module.default !== undefined) {
+      return module.default as T
+    }
+    
+    // CommonJS の場合、module には named exports が含まれる
+    // 空でないオブジェクトであればそれを返す
+    const keys = Object.keys(module).filter(k => k !== '__esModule')
+    if (keys.length > 0) {
+      // named exports がある場合は module 自体を返す
+      const result: Record<string, unknown> = {}
+      for (const key of keys) {
+        result[key] = module[key]
+      }
+      return result as T
+    }
+    
+    return null
+  } else {
+    // JSON ファイル
+    const content = await fs.readFile(filePath, 'utf-8')
+    return JSON.parse(content) as T
+  }
+}
+
+/**
  * グローバル設定を読み込む
  * 
  * @returns グローバル設定（見つからない場合は空オブジェクト）
  */
 export async function loadGlobalConfig(): Promise<GlobalConfig> {
-  const globalConfigPath = path.join(os.homedir(), GLOBAL_CONFIG_DIR, GLOBAL_CONFIG_FILE_NAME)
+  const globalConfigDir = path.join(os.homedir(), GLOBAL_CONFIG_DIR)
   
-  try {
-    const content = await fs.readFile(globalConfigPath, 'utf-8')
-    return JSON.parse(content) as GlobalConfig
-  } catch {
-    return {}
+  // 優先順位順に探索
+  for (const fileName of GLOBAL_CONFIG_FILE_NAMES) {
+    const configPath = path.join(globalConfigDir, fileName)
+    const config = await loadConfigFile<GlobalConfig>(configPath)
+    if (config) {
+      return config
+    }
   }
+  
+  return {}
 }
 
 /**
@@ -379,16 +441,14 @@ export async function findLocalConfig(cwd: string): Promise<{ config: LocalConfi
   const root = path.parse(currentDir).root
   
   while (currentDir !== root) {
-    const configPath = path.join(currentDir, LOCAL_CONFIG_FILE_NAME)
-    
-    try {
-      const content = await fs.readFile(configPath, 'utf-8')
-      return {
-        config: JSON.parse(content) as LocalConfig,
-        configPath
+    // 優先順位順に探索
+    for (const fileName of LOCAL_CONFIG_FILE_NAMES) {
+      const configPath = path.join(currentDir, fileName)
+      const config = await loadConfigFile<LocalConfig>(configPath)
+      
+      if (config) {
+        return { config, configPath }
       }
-    } catch {
-      // ファイルなし、上位ディレクトリを探索
     }
     
     currentDir = path.dirname(currentDir)
@@ -486,7 +546,11 @@ function resolveLocalContextRoot(root: LocalContextRootConfig, projectDir: strin
     name: root.name ?? path.basename(root.path),
     path: absolutePath,
     description: root.description,
-    readOnly: root.readOnly
+    readOnly: root.readOnly,
+    git: root.git,
+    ignorePatterns: root.ignorePatterns,
+    includePatterns: root.includePatterns,
+    defaultExtension: root.defaultExtension
   }
 }
 
@@ -499,7 +563,10 @@ function resolveGlobalContextRoot(root: GlobalContextRootConfig): ContextRootCon
     name: root.name,
     path: root.path,
     description: root.description,
-    readOnly: root.readOnly ?? true // グローバルはデフォルトで読み取り専用
+    readOnly: root.readOnly ?? true, // グローバルはデフォルトで読み取り専用
+    git: root.git,
+    ignorePatterns: root.ignorePatterns,
+    includePatterns: root.includePatterns
   }
 }
 
