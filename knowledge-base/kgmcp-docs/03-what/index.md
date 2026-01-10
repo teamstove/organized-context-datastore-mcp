@@ -12,7 +12,23 @@ tags:
 
 機能を開発ステータス別に整理しています。
 
+## クイックスタート
+
+```json
+{
+  "mcpServers": {
+    "ocd-mcp": {
+      "command": "npx",
+      "args": ["github:teamstove/organized-context-datastore-mcp"]
+    }
+  }
+}
+```
+
+Cursor / Claude Desktop に追加するだけ！
+
 ## 開発ステータス
+
 - [released](./released/) - リリース済み・利用可能な機能
 - [in-development](./in-development/) - 開発中の機能
 - [in-design](./in-design/) - 設計段階の機能
