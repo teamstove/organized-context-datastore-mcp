@@ -74,7 +74,7 @@ POST /api/mcp?config={"roots":["project-alpha","shared"],"readonly":["shared"]}
 ## 動作
 
 ### roots フィルタ
-- 指定した ID の Context Roots のみが `list_context_roots` で返される
+- 指定した ID の Context Roots のみが `ocd_list_context_roots` で返される
 - 未指定の場合は全ての Context Roots が対象
 
 ### readonly フィルタ

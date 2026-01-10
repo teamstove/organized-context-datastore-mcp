@@ -74,7 +74,7 @@ Context Root 配下のファイルフィルタリングと拡張子設定。
 }
 ```
 
-この設定で `mutate_context` の `create` を実行すると:
+この設定で `ocd_mutate_context` の `create` を実行すると:
 
 ```json
 {

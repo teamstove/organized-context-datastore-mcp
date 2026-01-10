@@ -41,16 +41,16 @@ Cursor / Claude Desktop の MCP 設定に追加するだけ！
 ### 読み取り系
 | ツール | 説明 |
 |--------|------|
-| `list_context_roots` | Context Root 一覧 |
-| `get_contexts` | パターン + フィルタで取得 |
-| `get_context_tree` | ツリー表示 ([tree-text-output-format](./released/tree-text-output-format)) |
-| `search_contexts` | キーワード検索 ([pattern-based-search](./released/pattern-based-search)) |
+| `ocd_list_context_roots` | Context Root 一覧 |
+| `ocd_get_contexts` | パターン + フィルタで取得 |
+| `ocd_get_context_tree` | ツリー表示 ([tree-text-output-format](./released/tree-text-output-format)) |
+| `ocd_search_contexts` | キーワード検索 ([pattern-based-search](./released/pattern-based-search)) |
 
 ### 書き込み系
 | ツール | 説明 |
 |--------|------|
-| **`mutate_context`** | 統合書き込み ([mutate-context-unified-tool](./released/mutate-context-unified-tool)) |
-| `commit` | draft_commit モード用 |
+| **`ocd_mutate_context`** | 統合書き込み ([mutate-context-unified-tool](./released/mutate-context-unified-tool)) |
+| `ocd_commit` | draft_commit モード用 |
 
 ## ストレージ
 - [file-git-storage](./released/file-git-storage) - ファイルベース + Git

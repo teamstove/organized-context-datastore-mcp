@@ -12,7 +12,7 @@ tags:
 # tree-text 出力フォーマット
 
 ## 概要
-`get_context_tree` ツールの Token 効率が良いテキスト形式出力。
+`ocd_get_context_tree` ツールの Token 効率が良いテキスト形式出力。
 JSON 形式と比較して大幅に Token 消費を削減。
 
 ## ツリースタイル

@@ -17,7 +17,7 @@ tags:
 ## Context
 
 ### 問題
-`get_context_tree` の JSON 出力は以下の問題があった:
+`ocd_get_context_tree` の JSON 出力は以下の問題があった:
 
 1. **Token 非効率**: JSON の冗長性（`"path":`, `"title":` 等のキー名繰り返し）
 2. **ネスト不明確**: フラット配列なので親子関係がパスから推測必要

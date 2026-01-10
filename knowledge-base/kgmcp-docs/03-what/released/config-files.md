@@ -141,7 +141,7 @@ Context Root 毎に Git コミットの挙動を設定できます。
 | 値 | 説明 |
 |----|------|
 | `'auto-commit'` | 各操作後に自動コミット |
-| `'manual'` | `commit` ツールで明示的にコミット（**デフォルト**） |
+| `'manual'` | `ocd_commit` ツールで明示的にコミット（**デフォルト**） |
 | `'none'` | Git を使用しない |
 
 > **Note**: `readOnly: true` の Context Root は書き込みしないため `git` 設定は無視されます。

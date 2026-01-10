@@ -10,7 +10,7 @@ tags:
 ---
 # Context CRUD Operations
 
-> ⚠️ **統合済み**: この機能は `mutate_context` に統合されました。
+> ⚠️ **統合済み**: この機能は `ocd_mutate_context` に統合されました。
 > → [mutate-context-unified-tool](../../../03-what/released/mutate-context-unified-tool)
 
 ## 経緧

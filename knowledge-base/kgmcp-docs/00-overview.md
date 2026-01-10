@@ -31,12 +31,12 @@ LLM向けに最適化されたMarkdownベースのコンテキスト管理シス
 
 | ツール | 説明 |
 |--------|------|
-| `list_context_roots` | Context Root 一覧 |
-| `get_contexts` | パターン + フィルタで取得 |
-| `get_context_tree` | ツリー表示 (tree-text/json) |
-| `search_contexts` | キーワード検索 |
-| **`mutate_context`** | **統合書き込み (create/update/delete/move)** |
-| `commit` | draft_commit モード用 |
+| `ocd_list_context_roots` | Context Root 一覧 |
+| `ocd_get_contexts` | パターン + フィルタで取得 |
+| `ocd_get_context_tree` | ツリー表示 (tree-text/json) |
+| `ocd_search_contexts` | キーワード検索 |
+| **`ocd_mutate_context`** | **統合書き込み (create/update/delete/move)** |
+| `ocd_commit` | draft_commit モード用 |
 
 ## ドキュメント構造
 

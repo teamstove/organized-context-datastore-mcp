@@ -96,7 +96,7 @@ ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
 
 ## Readonly Mode
 
-`--readonly` フラグを追加すると、書き込み系ツール (`mutate_context`, `commit`) が無効化される。
+`--readonly` フラグを追加すると、書き込み系ツール (`ocd_mutate_context`, `ocd_commit`) が無効化される。
 
 ```bash
 # stdio
