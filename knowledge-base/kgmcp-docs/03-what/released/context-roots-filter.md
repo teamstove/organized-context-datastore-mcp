@@ -1,15 +1,19 @@
 ---
 title: Context Roots Filter
-summary: URL クエリパラメータで Context Roots をフィルタリング
+summary: URL クエリパラメータで Context Roots をフィルタリング（HTTP モード専用）
 categories:
   - what
   - released
 tags:
   - filter
-  - http
+  - http-only
   - multi-tenant
 ---
 # Context Roots Filter
+
+> **HTTP モード専用機能**
+>
+> stdio モードでは `.ocd.config.json` で Context Roots を設定します。
 
 URL クエリパラメータで Context Roots を動的にフィルタリング。
 
@@ -65,6 +69,8 @@ POST /api/mcp?config={"roots":["project-alpha","shared"],"readonly":["shared"]}
 }
 ```
 
+※ HTTP サーバーを別途起動しておく必要があります。
+
 ## 動作
 
 ### roots フィルタ
@@ -77,3 +83,4 @@ POST /api/mcp?config={"roots":["project-alpha","shared"],"readonly":["shared"]}
 
 ## 関連
 - [server-modes](./server-modes) - サーバー起動モード
+- [config-files](./config-files) - stdio モードでの設定方法
