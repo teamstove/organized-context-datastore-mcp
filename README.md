@@ -1,4 +1,4 @@
-# Organized Context Datastore MCP
+# O.C.D. - Organized Context Datastore (MCP)
 
 階層構造を持つコンテキストを LLM と人間が共同で読み書きできる MCP サーバー。
 
@@ -173,14 +173,16 @@ Context Root 毎に Git コミットの挙動を設定：
 
 ## 🔧 MCP ツール一覧
 
+全ツールに `ocd_` プレフィックス（Organized Context Datastore）が付いています。
+
 | ツール | 説明 |
 |--------|------|
-| `list_context_roots` | Context Root 一覧を取得 |
-| `get_contexts` | パターンとフィルタでコンテキストを取得 |
-| `get_context_tree` | コンテキストツリー（目次）を取得 |
-| `search_contexts` | キーワードでコンテキストを検索 |
-| `mutate_context` | コンテキストを変更（create/update/delete/move） |
-| `commit` | 変更をコミット（draft_commit モード用） |
+| `ocd_list_context_roots` | Context Root 一覧を取得 |
+| `ocd_get_contexts` | パターンとフィルタでコンテキストを取得 |
+| `ocd_get_context_tree` | コンテキストツリー（目次）を取得 |
+| `ocd_search_contexts` | キーワードでコンテキストを検索 |
+| `ocd_mutate_context` | コンテキストを変更（create/update/delete/move） |
+| `ocd_commit` | 変更をコミット（git: 'manual' モード用） |
 
 ## 📁 ディレクトリ構造
 

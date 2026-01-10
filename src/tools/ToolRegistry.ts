@@ -101,13 +101,13 @@ function registerReadTools(
     : {}
   
   // -------------------------------------------------------------------------
-  // list_context_roots
+  // ocd_list_context_roots
   // -------------------------------------------------------------------------
   server.tool(
-    'list_context_roots',
+    'ocd_list_context_roots',
     isLocalDev
-      ? 'Context Root一覧を取得します（cwd から設定を探索）'
-      : 'Context Root一覧を取得します',
+      ? '[OCD] Context Root一覧を取得（cwd から設定を探索）'
+      : '[OCD] Context Root一覧を取得',
     cwdSchema,
     async (args) => {
       try {
@@ -133,7 +133,7 @@ function registerReadTools(
   )
   
   // -------------------------------------------------------------------------
-  // get_contexts
+  // ocd_get_contexts
   // -------------------------------------------------------------------------
   const getContextsSchema = {
     ...cwdSchema,
@@ -143,8 +143,10 @@ function registerReadTools(
   }
   
   server.tool(
-    'get_contexts',
-    `パターンとフィルタでコンテキストを取得します。
+    'ocd_get_contexts',
+    `[OCD] Organized Context Datastore - 階層構造を持つコンテキストを LLM と人間が共同で読み書きする MCP サーバー。
+
+パターンとフィルタでコンテキストを取得します。
 
 ## パラメータ
 - patterns: glob パターン配列 (例: ['project/**', 'docs/*'])
@@ -186,7 +188,7 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
   )
   
   // -------------------------------------------------------------------------
-  // get_context_tree
+  // ocd_get_context_tree
   // -------------------------------------------------------------------------
   const getContextTreeSchema = {
     ...cwdSchema,
@@ -202,8 +204,8 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
   }
   
   server.tool(
-    'get_context_tree',
-    `コンテキストツリー(目次)を取得します。
+    'ocd_get_context_tree',
+    `[OCD] コンテキストツリー(目次)を取得
 
 ## フォーマット
 - tree-text (default): Token効率の良いテキストツリー形式
@@ -271,7 +273,7 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
   )
   
   // -------------------------------------------------------------------------
-  // search_contexts
+  // ocd_search_contexts
   // -------------------------------------------------------------------------
   const searchContextsSchema = {
     ...cwdSchema,
@@ -280,8 +282,8 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
   }
   
   server.tool(
-    'search_contexts',
-    `キーワードでコンテキストを検索します${isLocalDev ? '（cwd から設定を探索）' : ''}`,
+    'ocd_search_contexts',
+    `[OCD] キーワードでコンテキストを検索${isLocalDev ? '（cwd から設定を探索）' : ''}`,
     searchContextsSchema,
     async (args) => {
       try {
@@ -331,7 +333,7 @@ function registerWriteTools(
     : {}
   
   // -------------------------------------------------------------------------
-  // mutate_context (統合版: create/update/delete/move)
+  // ocd_mutate_context (統合版: create/update/delete/move)
   // -------------------------------------------------------------------------
   const mutateContextSchema = {
     ...cwdSchema,
@@ -339,8 +341,8 @@ function registerWriteTools(
   }
   
   server.tool(
-    'mutate_context',
-    `コンテキストを変更します (統合版: create/update/delete/move を一括実行)
+    'ocd_mutate_context',
+    `[OCD] コンテキストを変更 (create/update/delete/move 一括実行)
 
 全ての書き込み操作を単一のツールで実行可能。
 複数の操作を配列で渡すことで一括処理できます。
@@ -388,7 +390,7 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
   )
   
   // -------------------------------------------------------------------------
-  // commit (draft_commit モード用)
+  // ocd_commit (draft_commit モード用)
   // -------------------------------------------------------------------------
   const commitSchema = {
     ...cwdSchema,
@@ -397,8 +399,8 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
   }
   
   server.tool(
-    'commit',
-    `変更をコミットします (draft_commitモード用)${isLocalDev ? '（cwd から設定を探索）' : ''}`,
+    'ocd_commit',
+    `[OCD] 変更をコミット (git: 'manual' モード用)${isLocalDev ? '（cwd から設定を探索）' : ''}`,
     commitSchema,
     async (args) => {
       try {
