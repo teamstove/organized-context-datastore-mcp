@@ -18,13 +18,12 @@ tags:
 |-------------|------|------|
 | MarkdownParser | `src/parser/MarkdownParser.ts` | Markdown解析とメタデータ抽出 |
 | FileGitStore | `src/storage/FileGitStore.ts` | ファイル+Gitストレージ |
-| PostgresStore | `src/storage/PostgresStore.ts` | PostgreSQLストレージ |
-| CompositeStore | `src/storage/CompositeStore.ts` | 複数ストアルーター |
-| ReadTools | `src/tools/ReadTools.ts` | 読み取り操作 |
-| WriteTools | `src/tools/WriteTools.ts` | 書き込み操作 |
+| ConfigLoader | `src/config/ConfigLoader.ts` | 設定ファイル探索・マージ |
+| ToolRegistry | `src/tools/ToolRegistry.ts` | ツール登録（モード別） |
 | JqFilterEngine | `src/filter/JqFilterEngine.ts` | jqフィルタ実行 |
+| HttpMcpServer | `src/http/HttpMcpServer.ts` | HTTP サーバー実装 |
 
 ## ソースコード参照
 
 詳細はソースコードを直接参照:
-`packages/knowledge-graph-mcp/src/`
+`packages/organized-context-datastore-mcp/src/`
