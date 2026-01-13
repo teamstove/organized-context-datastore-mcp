@@ -12,7 +12,32 @@ LLM向けに最適化されたMarkdownベースのコンテキスト管理シス
 
 ## クイックスタート
 
-### Cursor / Claude Desktop 設定
+```bash
+# stdio モード（デフォルト）
+npx organized-context-datastore-mcp
+
+# HTTP モード
+npx organized-context-datastore-mcp --http --port 3100
+```
+
+### MCP ツール
+
+| ツール | 説明 |
+|------|------|
+| `ocd_list_context_roots` | Context Root 一覧取得 |
+| `ocd_get_context_tree` | ツリー（目次）取得 |
+| `ocd_get_contexts` | コンテキスト取得 |
+| `ocd_search_contexts` | 検索 |
+| `ocd_mutate_context` | 作成/更新/削除/移動 |
+| `ocd_commit` | Git コミット |
+
+### Tree 表示フォーマット
+
+デフォルト: `$path: $title`
+
+変数: `$path`, `$title`, `$summary`, `$categories`, `$tags`
+
+## Cursor / Claude Desktop 設定
 
 ```json
 {
