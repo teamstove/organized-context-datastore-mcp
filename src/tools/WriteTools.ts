@@ -90,15 +90,12 @@ export class WriteTools {
           case 'create': {
             // バリデーション
             if (!op.title) throw new WriteError('create requires title', 'INVALID_OPERATION', op.path)
-            if (!op.summary) throw new WriteError('create requires summary', 'INVALID_OPERATION', op.path)
             
             const createResult = await this.createContextSingle({
               parentPath: op.path,
               title: op.title,
-              summary: op.summary,
               content: op.content,
-              categories: op.categories,
-              tags: op.tags,
+              attrs: op.attrs,
               extension: op.extension
             })
             
@@ -117,9 +114,7 @@ export class WriteTools {
             const updateResult = await this.updateContextSingle({
               path: op.path,
               title: op.title,
-              summary: op.summary,
-              categories: op.categories,
-              tags: op.tags,
+              attrs: op.attrs,
               contentUpdates: op.contentUpdates
             })
             
@@ -196,7 +191,7 @@ export class WriteTools {
    * 単一コンテキスト作成 (コミットなし)
    */
   private async createContextSingle(params: CreateContextParams): Promise<{ path: string; node: ContextNode }> {
-    const { parentPath, title, summary, content = '', categories = [], tags = [], extension } = params
+    const { parentPath, title, content = '', attrs = {}, extension } = params
     
     const slug = this.slugify(title)
     
@@ -215,7 +210,7 @@ export class WriteTools {
       throw new WriteError(`Context already exists: ${path}`, 'ALREADY_EXISTS', path)
     }
     
-    const markdown = this.generateMarkdown({ title, summary, categories, tags, content })
+    const markdown = this.generateMarkdown({ title, attrs, content })
     await this.store.write(path, markdown)
     
     const node = await this.loadContextNode(path)
@@ -279,7 +274,7 @@ export class WriteTools {
    * 単一コンテキスト更新 (コミットなし)
    */
   private async updateContextSingle(op: UpdateContextOperation): Promise<ContextNode> {
-    const { path, title, summary, categories, tags, contentUpdates } = op
+    const { path, title, attrs, contentUpdates } = op
     
     this.checkWritePermission(path)
     
@@ -289,9 +284,7 @@ export class WriteTools {
     const newFrontmatter = {
       ...frontmatter,
       ...(title !== undefined && { title }),
-      ...(summary !== undefined && { summary }),
-      ...(categories !== undefined && { categories }),
-      ...(tags !== undefined && { tags })
+      ...(attrs !== undefined && attrs) // attrs はマージ
     }
     
     let newContent = existingContent
@@ -497,19 +490,15 @@ export class WriteTools {
    */
   private generateMarkdown(params: {
     title: string
-    summary: string
-    categories: string[]
-    tags: string[]
+    attrs: Record<string, unknown>
     content: string
   }): string {
     const frontmatter = {
       title: params.title,
-      summary: params.summary,
-      categories: params.categories,
-      tags: params.tags
+      ...params.attrs
     }
     
-    const content = params.content || `# ${params.title}\n\n${params.summary}`
+    const content = params.content || `# ${params.title}`
     
     return matter.stringify(content, frontmatter)
   }

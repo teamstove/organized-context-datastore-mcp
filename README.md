@@ -165,7 +165,7 @@ Tree 表示のフォーマットを設定：
 ```javascript
 export default {
   contextRoots: [...],
-  treeTextFormat: '$path: $title - $summary'  // デフォルト
+  treeTextFormat: '$path: $title'  // デフォルト
 }
 ```
 
@@ -174,9 +174,6 @@ export default {
 |------|------|
 | `$path` | 相対パス |
 | `$title` | タイトル |
-| `$summary` | サマリー |
-| `$categories` | カテゴリ（カンマ区切り） |
-| `$tags` | タグ（カンマ区切り） |
 
 > **Note**: `readOnly: true` の Context Root は書き込みしないため `git` 設定は無視されます。
 
@@ -225,12 +222,8 @@ my-context-store/
 ```markdown
 ---
 title: 機能仕様
-summary: ユーザー認証機能の詳細仕様
-categories:
-  - feature-spec
-tags:
-  - authentication
-  - security
+status: draft
+priority: high
 ---
 
 # ユーザー認証機能
@@ -238,6 +231,35 @@ tags:
 ## 概要
 
 ユーザー認証機能の実装について...
+```
+
+### カスタム属性 (attrs)
+
+frontmatter の `title` 以外のフィールドはすべて `attrs` として扱われます。
+任意のキー・値を自由に設定できます。
+
+```markdown
+---
+title: ドキュメントタイトル
+status: published
+priority: high
+author: "@user"
+due: 2026-02-01
+---
+```
+
+ツール引数/レスポンスでの扱い：
+```json
+{
+  "path": "docs/overview",
+  "title": "ドキュメントタイトル",
+  "attrs": {
+    "status": "published",
+    "priority": "high",
+    "author": "@user",
+    "due": "2026-02-01"
+  }
+}
 ```
 
 ## 📦 インストール

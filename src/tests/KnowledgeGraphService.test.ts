@@ -55,9 +55,7 @@ describe('KnowledgeGraphService', () => {
         type: 'create',
         path: 'project',
         title: 'テスト機能',
-        summary: 'これはテスト機能です',
-        categories: ['feature-spec'],
-        tags: ['Phase1']
+        attrs: { status: 'draft' }
       }])
       
       // 結果は MutationResult 形式（Token 効率のため result は省略）
@@ -75,12 +73,8 @@ describe('KnowledgeGraphService', () => {
       const testFile = path.join(TEST_DIR, 'project', 'test-feature.md')
       await fs.writeFile(testFile, `---
 title: テスト機能
-summary: テスト機能の概要
-categories:
-  - feature-spec
-tags:
-  - Phase1
-  - priority-high
+status: draft
+priority: high
 ---
 
 # テスト機能
@@ -108,11 +102,11 @@ tags:
     it('should filter contexts by jq expression', async () => {
       const contexts = await service.getContexts({
         patterns: ['project/**/*.md'],
-        filter: '.categories | any(. == "feature-spec")'
+        filter: '.attrs.status == "draft"'
       })
       
       expect(contexts.length).toBeGreaterThan(0)
-      expect(contexts[0].categories).toContain('feature-spec')
+      expect(contexts[0].attrs.status).toBe('draft')
     })
     
     it('should parse annotations', async () => {
@@ -149,9 +143,7 @@ tags:
       const testFile = path.join(TEST_DIR, 'project', 'update-test.md')
       await fs.writeFile(testFile, `---
 title: 更新テスト
-summary: 更新前のサマリ
-categories: []
-tags: []
+status: draft
 ---
 
 # 更新テスト
@@ -160,12 +152,12 @@ tags: []
 `)
     })
     
-    it('should update context summary', async () => {
+    it('should update context attrs', async () => {
       // mutateContext で更新
       const result = await service.mutateContext([{
         type: 'update',
         path: 'project/update-test',
-        summary: '更新後のサマリ'
+        attrs: { status: 'published' }
       }])
       
       expect(result.success).toBe(1)
@@ -216,7 +208,6 @@ tags: []
       
       await fs.writeFile(path.join(TEST_DIR, 'project/index.md'), `---
 title: プロジェクト概要
-summary: プロジェクトのトップページ
 ---
 
 # プロジェクト概要
@@ -224,7 +215,6 @@ summary: プロジェクトのトップページ
       
       await fs.writeFile(path.join(TEST_DIR, 'project/features/feature1.md'), `---
 title: 機能1
-summary: 機能1の説明
 ---
 
 # 機能1
@@ -266,17 +256,14 @@ summary: 機能1の説明
       // features は仮想ディレクトリなので除外される
       expect(treeText).not.toContain('features:')
       expect(treeText).toContain('feature1:')
-      // デフォルトフォーマットは "$path: $title - $summary" なので title と summary が表示される
+      // デフォルトフォーマットは "$path: $title" なので title が表示される
       expect(treeText).toContain('プロジェクト概要')  // title
-      expect(treeText).toContain('プロジェクトのトップページ')  // summary
       expect(treeText).toContain('機能1')  // title
-      expect(treeText).toContain('機能1の説明')  // summary
     })
     
     it('should get context tree in flat style', async () => {
       const result = await service.getContextTree({
-        rootPath: 'project',
-        treeStyle: 'flat'
+        rootPath: 'project'
       })
       
       expect(result.format).toBe('tree-text')
@@ -291,8 +278,6 @@ summary: 機能1の説明
     beforeEach(async () => {
       await fs.writeFile(path.join(TEST_DIR, 'project/search-test.md'), `---
 title: 検索テスト
-summary: 検索用のテストドキュメント
-tags: [検索, テスト]
 ---
 
 # 検索テスト
@@ -317,14 +302,12 @@ tags: [検索, テスト]
         {
           type: 'create',
           path: 'project',
-          title: 'mutate-test-1',
-          summary: 'テスト1'
+          title: 'mutate-test-1'
         },
         {
           type: 'create',
           path: 'project',
-          title: 'mutate-test-2',
-          summary: 'テスト2'
+          title: 'mutate-test-2'
         }
       ])
       
@@ -339,7 +322,7 @@ tags: [検索, テスト]
         {
           type: 'update',
           path: 'project/mutate-test-1',
-          summary: '更新済み'
+          attrs: { status: 'updated' }
         },
         {
           type: 'delete',
@@ -353,7 +336,7 @@ tags: [検索, テスト]
       // 検証: test-1 は更新されている
       const updated = await service.getContexts({ patterns: ['project/mutate-test-1*'] })
       expect(updated).toHaveLength(1)
-      expect(updated[0].summary).toBe('更新済み')
+      expect(updated[0].attrs.status).toBe('updated')
       
       // 検証: test-2 は削除されている
       const deleted = await service.getContexts({ patterns: ['project/mutate-test-2*'] })
@@ -367,7 +350,7 @@ tags: [検索, テスト]
           type: 'create',
           path: 'project',
           title: 'move-source',
-          summary: '移動元'
+          attrs: { note: '移動元' }
         }
       ])
       
@@ -387,7 +370,7 @@ tags: [検索, テスト]
       // 検証
       const moved = await service.getContexts({ patterns: ['project/move-dest*'] })
       expect(moved).toHaveLength(1)
-      expect(moved[0].summary).toBe('移動元')
+      expect(moved[0].attrs.note).toBe('移動元')
     })
     
     it('should handle errors gracefully', async () => {
@@ -395,7 +378,7 @@ tags: [検索, テスト]
         {
           type: 'update',
           path: 'project/non-existent',
-          summary: '存在しない'
+          attrs: { status: 'na' }
         }
       ])
       
@@ -411,13 +394,12 @@ tags: [検索, テスト]
         {
           type: 'create',
           path: 'project',
-          title: 'partial-success',
-          summary: 'これは成功'
+          title: 'partial-success'
         },
         {
           type: 'update',
           path: 'project/non-existent',
-          summary: 'これは失敗'
+          attrs: { status: 'failed' }
         }
       ])
       

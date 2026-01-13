@@ -26,11 +26,7 @@ describe('MCP Server Tools', () => {
     // テストデータを作成
     await fs.writeFile(path.join(TEST_DIR, 'project/index.md'), `---
 title: Test Project
-summary: テストプロジェクト
-categories:
-  - project-overview
-tags:
-  - test
+status: active
 ---
 
 # Test Project
@@ -40,12 +36,8 @@ tags:
     
     await fs.writeFile(path.join(TEST_DIR, 'project/features/feature1.md'), `---
 title: Feature 1
-summary: 機能1の仕様
-categories:
-  - feature-spec
-tags:
-  - Phase1
-  - priority-high
+status: draft
+priority: high
 ---
 
 # Feature 1
@@ -144,7 +136,7 @@ tags:
     it('should handle getContexts with jq filter', async () => {
       const result = await service.getContexts({
         patterns: ['project/**/*.md'],
-        filter: '.categories | any(. == "feature-spec")'
+        filter: '.attrs.status == "draft"'
       })
       
       expect(Array.isArray(result)).toBe(true)
@@ -186,9 +178,7 @@ tags:
         type: 'create',
         path: 'project/features',
         title: 'New Feature',
-        summary: '新しい機能',
-        categories: ['feature-spec'],
-        tags: ['Phase2']
+        attrs: { status: 'draft' }
       }])
       
       expect(result.success).toBe(1)
@@ -202,7 +192,7 @@ tags:
       const result = await service.mutateContext([{
         type: 'update',
         path: 'project/features/feature1',
-        summary: '更新された機能1の仕様'
+        attrs: { status: 'published' }
       }])
       
       expect(result.success).toBe(1)
@@ -235,14 +225,12 @@ tags:
         {
           type: 'create',
           path: 'project/features',
-          title: 'Batch Feature 1',
-          summary: 'バッチ機能1'
+          title: 'Batch Feature 1'
         },
         {
           type: 'create',
           path: 'project/features',
-          title: 'Batch Feature 2',
-          summary: 'バッチ機能2'
+          title: 'Batch Feature 2'
         }
       ])
       

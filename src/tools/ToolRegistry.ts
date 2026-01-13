@@ -37,9 +37,7 @@ export const ContextMutationSchema = z.object({
   path: z.string().describe('対象パス (create: 親パス, update/delete: 対象パス, move: 移動元)'),
   to: z.string().optional().describe('移動先パス (move 時のみ)'),
   title: z.string().optional().describe('タイトル (create時必須)'),
-  summary: z.string().optional().describe('サマリ (create時必須)'),
-  categories: z.array(z.string()).optional().describe('カテゴリ'),
-  tags: z.array(z.string()).optional().describe('タグ'),
+  attrs: z.record(z.unknown()).optional().describe('カスタム属性 (frontmatter に保存)'),
   content: z.string().optional().describe('初期コンテンツ (create 時のみ)'),
   contentUpdates: z.array(ContentUpdateSchema).optional().describe('コンテンツ更新操作 (update 時のみ)')
 })
@@ -151,13 +149,12 @@ path はファイルシステム上の絶対パスであり、ツールのパラ
 
 ## パラメータ
 - patterns: glob パターン配列 (例: ['project/**', 'docs/*'])
-- filter: jq フィルタ式 (例: '.categories | any(. == "feature-spec")')
+- filter: jq フィルタ式 (例: '.attrs.status == "draft"')
 - includeContent: コンテンツを含めるか (default: true)
 ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''}
 
 ## jq フィルタ例
-- カテゴリでフィルタ: '.categories | any(. == "feature-spec")'
-- タグでフィルタ: '.tags | any(. == "Phase1")'
+- attrs でフィルタ: '.attrs.status == "draft"'
 - 未完了TODOがあるもの: '.todos | any(.completed == false)'`,
     getContextsSchema,
     async (args) => {
@@ -199,7 +196,7 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
     format: z.enum(['tree-text', 'json']).optional().describe("出力形式 (default: 'tree-text')"),
     // treeStyle: 現在は常に 'flat' を使用（nested は未対応のため一時的に無効化）
     // treeStyle: z.enum(['nested', 'flat']).optional().describe("ツリースタイル (default: 'flat')"),
-    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title - $summary"). 変数: $path, $title, $summary, $categories, $tags'),
+    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title"). 変数: $path, $title'),
     maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)')
   }
   
@@ -212,9 +209,8 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
 - json: 従来のJSON配列形式
 
 ## 表示フォーマット (treeTextFormat)
-デフォルト: "$path: $title - $summary"
-使用可能な変数: $path, $title, $summary, $categories, $tags
-例: "$path: $summary [$categories]"
+デフォルト: "$path: $title"
+使用可能な変数: $path, $title
 ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}`,
     getContextTreeSchema,
     async (args) => {
@@ -225,7 +221,6 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           rootPaths?: string[]
           depth?: number
           format?: 'tree-text' | 'json'
-          treeStyle?: 'nested' | 'flat'
           treeTextFormat?: string
           maxNodes?: number
         }
@@ -235,7 +230,6 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           rootPaths: typedArgs.rootPaths,
           depth: typedArgs.depth,
           format: typedArgs.format,
-          treeStyle: typedArgs.treeStyle,
           treeTextFormat: typedArgs.treeTextFormat,
           maxNodes: typedArgs.maxNodes
         })
@@ -350,12 +344,12 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
 
 ## 操作タイプ
 
-| type   | 必須フィールド              | オプション                                |
-|--------|---------------------------|------------------------------------------|
-| create | path (親), title, summary | categories, tags, content                |
-| update | path                      | title, summary, categories, tags, contentUpdates |
-| delete | path                      | -                                        |
-| move   | path (元), to             | -                                        |
+| type   | 必須フィールド       | オプション                     |
+|--------|---------------------|------------------------------|
+| create | path (親), title    | attrs, content               |
+| update | path                | title, attrs, contentUpdates |
+| delete | path                | -                            |
+| move   | path (元), to       | -                            |
 
 ## contentUpdates の操作タイプ
 

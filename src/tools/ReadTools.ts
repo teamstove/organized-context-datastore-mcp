@@ -196,10 +196,7 @@ export class ReadTools {
    * - rootPath: ルートパス
    * - depth: 深さ (default: 全階層)
    * - format: 'json' | 'tree-text' (default: 'tree-text')
-   * - treeStyle: 'nested' | 'flat' (default: 'nested')
-   * - includeSummary: summary を含めるか (default: true)
-   * - includeCategories: categories を含めるか (default: true)
-   * - includeTags: tags を含めるか (default: true)
+   * - treeTextFormat: 表示フォーマット (default: '$path: $title')
    * - maxNodes: 返却ノード数上限 (default: 1000)
    */
   /**
@@ -214,12 +211,7 @@ export class ReadTools {
       rootPaths,
       depth,
       format = 'tree-text',
-      treeStyle = 'flat',
-      // デフォルトフォーマット: "$path: $title - $summary"
-      includeSummary = false,
-      includeCategories = false,
-      includeTags = false,
-      treeTextFormat = '$path: $title - $summary',
+      treeTextFormat = '$path: $title',
       maxNodes = 1000
     } = options
     
@@ -235,10 +227,6 @@ export class ReadTools {
           rootPath,
           depth,
           format,
-          treeStyle,
-          includeSummary,
-          includeCategories,
-          includeTags,
           treeTextFormat,
           maxNodes
         })
@@ -264,10 +252,6 @@ export class ReadTools {
       rootPath: singleRootPath,
       depth,
       format,
-      treeStyle,
-      includeSummary,
-      includeCategories,
-      includeTags,
       treeTextFormat,
       maxNodes
     })
@@ -280,10 +264,6 @@ export class ReadTools {
     rootPath: string
     depth?: number
     format?: 'json' | 'tree-text'
-    treeStyle?: 'nested' | 'flat'
-    includeSummary?: boolean
-    includeCategories?: boolean
-    includeTags?: boolean
     treeTextFormat?: string
     maxNodes?: number
   }): Promise<ContextTreeResult> {
@@ -291,11 +271,7 @@ export class ReadTools {
       rootPath, 
       depth,
       format = 'tree-text',
-      treeStyle = 'flat',
-      includeSummary = false,
-      includeCategories = false,
-      includeTags = false,
-      treeTextFormat = '$path: $title - $summary',
+      treeTextFormat = '$path: $title',
       maxNodes = 1000
     } = options
     
@@ -341,7 +317,7 @@ export class ReadTools {
     const treeText = this.renderTreeText(
       rootPath,
       limitedSummaries,
-      { treeStyle, includeSummary, includeCategories, includeTags, treeTextFormat }
+      { treeTextFormat }
     )
     
     return {
@@ -399,9 +375,7 @@ export class ReadTools {
         const virtualSummary: ContextNodeSummary = {
           path: dirPath,
           title: this.dirNameToTitle(dirName),
-          summary: `${this.dirNameToTitle(dirName)} ディレクトリ`,
-          categories: ['directory'],
-          tags: [],
+          attrs: {},
           childCount: 0,  // 後で更新される
           isVirtual: true  // 仮想ノードフラグ
         }
@@ -452,13 +426,6 @@ export class ReadTools {
   /**
    * ツリー構造をテキスト形式でレンダリング
    * 
-   * @example nested 出力例:
-   * [kgmcp-docs] (18 nodes)
-   * ├ 01-why: なぜ必要か [chi:2]
-   * │ ├ problems-we-solve: 解決する課題
-   * │ └ vision-and-goals: ビジョンと目標
-   * └ 02-how: 実装とアーキテクチャ [chi:2]
-   * 
    * @example flat 出力例:
    * [kgmcp-docs] (18 nodes)
    * 01-why: なぜ必要か
@@ -470,37 +437,22 @@ export class ReadTools {
     rootPath: string,
     summaries: ContextNodeSummary[],
     options: {
-      treeStyle: 'nested' | 'flat'
-      includeSummary: boolean
-      includeCategories: boolean
-      includeTags: boolean
       treeTextFormat: string
     }
   ): string {
-    const { treeStyle, includeSummary, includeCategories, includeTags, treeTextFormat } = options
-    
-    // フラット形式の場合
-    if (treeStyle === 'flat') {
-      return this.renderTreeTextFlat(rootPath, summaries, { includeSummary, includeCategories, includeTags, treeTextFormat })
-    }
-    
-    // ネスト形式
-    return this.renderTreeTextNested(rootPath, summaries, { includeSummary, includeCategories, includeTags, treeTextFormat })
+    const { treeTextFormat } = options
+    return this.renderTreeTextFlat(rootPath, summaries, { treeTextFormat })
   }
   
   /**
    * フラット形式でレンダリング
    * 
-   * treeTextFormat が指定されている場合はフォーマット文字列を使用
-   * 使用可能な変数: $path, $title, $summary, $categories, $tags
+   * 使用可能な変数: $path, $title
    */
   private renderTreeTextFlat(
     rootPath: string,
     summaries: ContextNodeSummary[],
     options: {
-      includeSummary: boolean
-      includeCategories: boolean
-      includeTags: boolean
       treeTextFormat: string
     }
   ): string {
@@ -526,57 +478,28 @@ export class ReadTools {
    * 
    * @param relativePath 相対パス
    * @param summary サマリー
-   * @param format フォーマット文字列 (例: "$path: $title - $summary")
+   * @param format フォーマット文字列 (例: "$path: $title")
    * 
-   * 空の値は省略され、前後の区切り文字も適切に処理されます。
-   * 例: summary が空の場合、"$path: $title - $summary" → "$path: $title"
+   * 使用可能な変数: $path, $title
    */
   private formatTreeLine(
     relativePath: string,
     summary: ContextNodeSummary,
     format: string
   ): string {
-    // 変数と値のマッピング
-    const vars: Record<string, string> = {
-      'path': relativePath,
-      'title': summary.title,
-      'summary': summary.summary || '',
-      'categories': summary.categories.join(','),
-      'tags': summary.tags.join(',')
-    }
-    
-    let result = format
-    
-    // 各変数を置換
-    for (const [varName, value] of Object.entries(vars)) {
-      const pattern = '\\$' + varName
-      if (value) {
-        // 値がある場合はそのまま置換
-        result = result.replace(new RegExp(pattern, 'g'), value)
-      } else {
-        // 値が空の場合は、変数とその前後の区切り文字（" - ", " | ", " / " など）を削除
-        result = result.replace(new RegExp('\\s*[-|/]\\s*' + pattern, 'g'), '')
-        result = result.replace(new RegExp(pattern + '\\s*[-|/]\\s*', 'g'), '')
-        result = result.replace(new RegExp(pattern, 'g'), '')
-      }
-    }
-    
-    // 末尾の空白や区切り文字を削除
-    result = result.replace(/\s*[-|/]\s*$/, '').trim()
-    
-    return result
+    return format
+      .replace(/\$path/g, relativePath)
+      .replace(/\$title/g, summary.title)
   }
   
   /**
-   * ネスト形式でレンダリング
+   * ネスト形式でレンダリング (将来用に保持)
    */
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   private renderTreeTextNested(
     rootPath: string,
     summaries: ContextNodeSummary[],
     options: {
-      includeSummary: boolean
-      includeCategories: boolean
-      includeTags: boolean
       treeTextFormat: string
     }
   ): string {
@@ -725,10 +648,8 @@ export class ReadTools {
     return contexts.filter(ctx => {
       const searchText = [
         ctx.title,
-        ctx.summary,
         ctx.content,
-        ...ctx.tags,
-        ...ctx.categories
+        JSON.stringify(ctx.attrs)
       ].join(' ').toLowerCase()
       
       return keywords.every(kw => searchText.includes(kw))
@@ -776,9 +697,7 @@ export class ReadTools {
     return {
       path: context.path,
       title: context.title,
-      summary: context.summary,
-      categories: context.categories,
-      tags: context.tags,
+      attrs: context.attrs,
       updatedAt: context.updatedAt,
       hasChildren: childFiles.length > 0,
       childCount: childFiles.length

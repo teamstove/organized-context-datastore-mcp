@@ -37,12 +37,11 @@ export interface ParsedMarkdown {
 
 /**
  * Frontmatter 構造
+ * 
+ * title 以外のフィールドは全て attrs として扱う
  */
 export interface MarkdownFrontmatter {
   title?: string
-  summary?: string
-  categories?: string[]
-  tags?: string[]
   related?: string[]
   [key: string]: unknown
 }
@@ -303,26 +302,13 @@ export function toContextNode(
     title = filename.replace(/\.md$/, '')
   }
   
-  // サマリを決定 (Frontmatter > 最初の段落)
-  let summary = frontmatter.summary
-  if (!summary) {
-    // 最初の段落を抽出 (見出しでない、空でない最初の行)
-    const lines = content.split('\n')
-    for (const line of lines) {
-      const trimmed = line.trim()
-      if (trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('-')) {
-        summary = trimmed.substring(0, 200)  // 最大200文字
-        break
-      }
-    }
-  }
+  // attrs を構築 (title と related 以外の全フィールド)
+  const { title: _title, related: _related, ...attrs } = frontmatter
   
   return {
     path,
     title: title ?? path,
-    summary: summary ?? '',
-    categories: frontmatter.categories ?? [],
-    tags: frontmatter.tags ?? [],
+    attrs,
     createdAt: metadata.createdAt,
     updatedAt: metadata.updatedAt,
     links: {

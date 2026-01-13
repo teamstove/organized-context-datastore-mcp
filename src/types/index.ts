@@ -18,14 +18,8 @@ export interface ContextNode {
   /** タイトル (Frontmatterのtitleまたはファイル名) */
   title: string
   
-  /** サマリ (Frontmatterのsummaryまたは最初の段落) */
-  summary: string
-  
-  /** カテゴリ (例: ['feature-spec', 'phase1']) */
-  categories: string[]
-  
-  /** タグ (例: ['商品管理', 'priority-high']) */
-  tags: string[]
+  /** カスタム属性 (frontmatter の title 以外のフィールド) */
+  attrs: Record<string, unknown>
   
   /** 作成日時 (ISO 8601) */
   createdAt: string
@@ -64,9 +58,8 @@ export interface ContextNode {
 export interface ContextNodeSummary {
   path: string
   title: string
-  summary: string
-  categories: string[]
-  tags: string[]
+  /** カスタム属性 */
+  attrs: Record<string, unknown>
   updatedAt?: string  // 仮想ノードには存在しない場合がある
   hasChildren?: boolean
   childCount: number
@@ -183,36 +176,14 @@ export interface GetContextTreeOptions {
   format?: 'json' | 'tree-text'
   
   /**
-   * ツリー表示スタイル (tree-text のみ有効)
-   * - 'flat': フルパス表記（階層なし）
-   * - 'nested': ネスト形式（ツリー記号で階層表示）
-   * 
-   * default: 'flat'
-   */
-  treeStyle?: 'nested' | 'flat'
-  
-  /** summary を含めるか (tree-text のみ有効, treeTextFormat 未指定時のみ有効, default: false) */
-  includeSummary?: boolean
-  
-  /** categories を含めるか (tree-text のみ有効, treeTextFormat 未指定時のみ有効, default: false) */
-  includeCategories?: boolean
-  
-  /** tags を含めるか (tree-text のみ有効, treeTextFormat 未指定時のみ有効, default: false) */
-  includeTags?: boolean
-  
-  /**
    * tree-text 形式の表示フォーマット
    * 
    * 使用可能な変数:
    * - $path: 相対パス
    * - $title: タイトル
-   * - $summary: サマリー
-   * - $categories: カテゴリ (カンマ区切り)
-   * - $tags: タグ (カンマ区切り)
    * 
-   * @example "$path: $title - $summary"
-   * @example "$path: $summary [$categories]"
-   * @default "$path: $title - $summary"
+   * @example "$path: $title"
+   * @default "$path: $title"
    */
   treeTextFormat?: string
   
@@ -270,17 +241,11 @@ export interface CreateContextParams {
   /** タイトル */
   title: string
   
-  /** サマリ */
-  summary: string
-  
   /** 本文コンテンツ (オプション) */
   content?: string
   
-  /** カテゴリ (オプション) */
-  categories?: string[]
-  
-  /** タグ (オプション) */
-  tags?: string[]
+  /** カスタム属性 (オプション) */
+  attrs?: Record<string, unknown>
   
   /**
    * ファイル拡張子 (オプション)
@@ -354,14 +319,8 @@ export interface UpdateContextOperation {
   /** タイトル (変更する場合) */
   title?: string
   
-  /** サマリ (変更する場合) */
-  summary?: string
-  
-  /** カテゴリ (変更する場合) */
-  categories?: string[]
-  
-  /** タグ (変更する場合) */
-  tags?: string[]
+  /** カスタム属性 (変更する場合、マージされる) */
+  attrs?: Record<string, unknown>
   
   /** コンテンツ操作 (複数指定可、順番に適用) */
   contentUpdates?: ContentUpdate[]
@@ -395,20 +354,20 @@ export interface MoveContextOperation {
  * 全ての書き込み操作を単一のツールで実行可能。
  * type によって必須フィールドが変わる:
  * 
- * | type   | 必須                        | オプション                                        |
- * |--------|-----------------------------|-------------------------------------------------|
- * | create | path, title, summary        | categories, tags, content                        |
- * | update | path                        | title, summary, categories, tags, contentUpdates |
- * | delete | path                        | -                                                |
- * | move   | path, to                    | -                                                |
+ * | type   | 必須             | オプション                  |
+ * |--------|------------------|---------------------------|
+ * | create | path, title      | attrs, content            |
+ * | update | path             | title, attrs, contentUpdates |
+ * | delete | path             | -                          |
+ * | move   | path, to         | -                          |
  * 
  * ## 使用例
  * 
  * ```json
  * {
  *   "operations": [
- *     { "type": "create", "path": "docs/features", "title": "新機能", "summary": "..." },
- *     { "type": "update", "path": "docs/existing", "summary": "更新" },
+ *     { "type": "create", "path": "docs/features", "title": "新機能" },
+ *     { "type": "update", "path": "docs/existing", "title": "更新" },
  *     { "type": "move", "path": "old/path", "to": "new/path" },
  *     { "type": "delete", "path": "docs/obsolete" }
  *   ]
@@ -450,17 +409,11 @@ export interface ContextMutation {
   title?: string
   
   /**
-   * サマリ
-   * - create: 必須
-   * - update: 変更する場合のみ
+   * カスタム属性 (create/update で使用)
+   * 
+   * frontmatter に任意のキー・値を保存できる
    */
-  summary?: string
-  
-  /** カテゴリ (create/update で使用) */
-  categories?: string[]
-  
-  /** タグ (create/update で使用) */
-  tags?: string[]
+  attrs?: Record<string, unknown>
   
   // ==========================================================================
   // コンテンツ (create/update)
@@ -542,17 +495,11 @@ export interface UpdateContextParams {
   /** タイトル (変更する場合) */
   title?: string
   
-  /** サマリ (変更する場合) */
-  summary?: string
-  
   /** コンテンツ (変更する場合) */
   content?: string
   
-  /** カテゴリ (変更する場合) */
-  categories?: string[]
-  
-  /** タグ (変更する場合) */
-  tags?: string[]
+  /** カスタム属性 (変更する場合) */
+  attrs?: Record<string, unknown>
 }
 
 /**
@@ -661,7 +608,7 @@ export interface KnowledgeGraphMCPConfig {
   /** Context Roots 設定 */
   contextRoots: ContextRootConfig[]
   
-  /** tree-text 形式の表示フォーマット (default: "$path: $title - $summary") */
+  /** tree-text 形式の表示フォーマット (default: "$path: $title") */
   treeTextFormat?: string
 }
 
@@ -844,13 +791,9 @@ export interface LocalConfig {
    * 使用可能な変数:
    * - $path: 相対パス
    * - $title: タイトル
-   * - $summary: サマリー
-   * - $categories: カテゴリ (カンマ区切り)
-   * - $tags: タグ (カンマ区切り)
    * 
-   * @example "$path: $title - $summary"
-   * @example "$path: $summary [$categories]"
-   * @default "$path: $title - $summary"
+   * @example "$path: $title"
+   * @default "$path: $title"
    */
   treeTextFormat?: string
 }

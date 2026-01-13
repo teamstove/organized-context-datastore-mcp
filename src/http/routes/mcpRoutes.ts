@@ -391,10 +391,7 @@ async function executeToolCall(
         rootPaths: args.rootPaths as string[] | undefined,
         depth: args.depth as number | undefined,
         format: args.format as 'json' | 'tree-text' | undefined,
-        treeStyle: args.treeStyle as 'nested' | 'flat' | undefined,
-        includeSummary: args.includeSummary as boolean | undefined,
-        includeCategories: args.includeCategories as boolean | undefined,
-        includeTags: args.includeTags as boolean | undefined,
+        treeTextFormat: args.treeTextFormat as string | undefined,
         maxNodes: args.maxNodes as number | undefined
       })
     
@@ -673,7 +670,8 @@ function getLocalDevToolDefinitions(serverMode: ServerMode): Array<{
           rootPaths: { type: 'array', items: { type: 'string' }, description: 'ルートパス配列' },
           depth: { type: 'number', description: '深さ制限' },
           format: { type: 'string', enum: ['tree-text', 'json'], description: '出力形式' },
-          treeStyle: { type: 'string', enum: ['nested', 'flat'], description: 'ツリースタイル' }
+          treeTextFormat: { type: 'string', description: '表示フォーマット (default: $path: $title)' },
+          maxNodes: { type: 'number', description: '返却ノード数上限' }
         },
         required: ['cwd']
       }
@@ -710,9 +708,7 @@ function getLocalDevToolDefinitions(serverMode: ServerMode): Array<{
                 path: { type: 'string' },
                 to: { type: 'string' },
                 title: { type: 'string' },
-                summary: { type: 'string' },
-                categories: { type: 'array', items: { type: 'string' } },
-                tags: { type: 'array', items: { type: 'string' } },
+                attrs: { type: 'object', description: 'カスタム属性' },
                 content: { type: 'string' },
                 contentUpdates: { type: 'array' }
               },
