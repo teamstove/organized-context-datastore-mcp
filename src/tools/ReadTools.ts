@@ -526,19 +526,45 @@ export class ReadTools {
    * 
    * @param relativePath 相対パス
    * @param summary サマリー
-   * @param format フォーマット文字列 (例: "$path: $title")
+   * @param format フォーマット文字列 (例: "$path: $title - $summary")
+   * 
+   * 空の値は省略され、前後の区切り文字も適切に処理されます。
+   * 例: summary が空の場合、"$path: $title - $summary" → "$path: $title"
    */
   private formatTreeLine(
     relativePath: string,
     summary: ContextNodeSummary,
     format: string
   ): string {
-    return format
-      .replace(/\$path/g, relativePath)
-      .replace(/\$title/g, summary.title)
-      .replace(/\$summary/g, summary.summary)
-      .replace(/\$categories/g, summary.categories.join(','))
-      .replace(/\$tags/g, summary.tags.join(','))
+    // 変数と値のマッピング
+    const vars: Record<string, string> = {
+      'path': relativePath,
+      'title': summary.title,
+      'summary': summary.summary || '',
+      'categories': summary.categories.join(','),
+      'tags': summary.tags.join(',')
+    }
+    
+    let result = format
+    
+    // 各変数を置換
+    for (const [varName, value] of Object.entries(vars)) {
+      const pattern = '\\$' + varName
+      if (value) {
+        // 値がある場合はそのまま置換
+        result = result.replace(new RegExp(pattern, 'g'), value)
+      } else {
+        // 値が空の場合は、変数とその前後の区切り文字（" - ", " | ", " / " など）を削除
+        result = result.replace(new RegExp('\\s*[-|/]\\s*' + pattern, 'g'), '')
+        result = result.replace(new RegExp(pattern + '\\s*[-|/]\\s*', 'g'), '')
+        result = result.replace(new RegExp(pattern, 'g'), '')
+      }
+    }
+    
+    // 末尾の空白や区切り文字を削除
+    result = result.replace(/\s*[-|/]\s*$/, '').trim()
+    
+    return result
   }
   
   /**
