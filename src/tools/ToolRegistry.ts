@@ -199,7 +199,7 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
     format: z.enum(['tree-text', 'json']).optional().describe("出力形式 (default: 'tree-text')"),
     // treeStyle: 現在は常に 'flat' を使用（nested は未対応のため一時的に無効化）
     // treeStyle: z.enum(['nested', 'flat']).optional().describe("ツリースタイル (default: 'flat')"),
-    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title"). 変数: $path, $title, $summary, $categories, $tags'),
+    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title - $summary"). 変数: $path, $title, $summary, $categories, $tags'),
     maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)')
   }
   
@@ -212,7 +212,7 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
 - json: 従来のJSON配列形式
 
 ## 表示フォーマット (treeTextFormat)
-デフォルト: "$path: $title"
+デフォルト: "$path: $title - $summary"
 使用可能な変数: $path, $title, $summary, $categories, $tags
 例: "$path: $summary [$categories]"
 ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}`,

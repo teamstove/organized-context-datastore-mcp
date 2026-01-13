@@ -210,9 +210,9 @@ export interface GetContextTreeOptions {
    * - $categories: カテゴリ (カンマ区切り)
    * - $tags: タグ (カンマ区切り)
    * 
-   * @example "$path: $title"
+   * @example "$path: $title - $summary"
    * @example "$path: $summary [$categories]"
-   * @default "$path: $title"
+   * @default "$path: $title - $summary"
    */
   treeTextFormat?: string
   
@@ -661,7 +661,7 @@ export interface KnowledgeGraphMCPConfig {
   /** Context Roots 設定 */
   contextRoots: ContextRootConfig[]
   
-  /** tree-text 形式の表示フォーマット (default: "$path: $title") */
+  /** tree-text 形式の表示フォーマット (default: "$path: $title - $summary") */
   treeTextFormat?: string
 }
 
@@ -848,9 +848,9 @@ export interface LocalConfig {
    * - $categories: カテゴリ (カンマ区切り)
    * - $tags: タグ (カンマ区切り)
    * 
-   * @example "$path: $title"
+   * @example "$path: $title - $summary"
    * @example "$path: $summary [$categories]"
-   * @default "$path: $title"
+   * @default "$path: $title - $summary"
    */
   treeTextFormat?: string
 }

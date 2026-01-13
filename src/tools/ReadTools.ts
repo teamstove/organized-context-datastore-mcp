@@ -215,11 +215,11 @@ export class ReadTools {
       depth,
       format = 'tree-text',
       treeStyle = 'flat',
-      // デフォルトフォーマット: "$path: $title" (includeSummary 等は false)
+      // デフォルトフォーマット: "$path: $title - $summary"
       includeSummary = false,
       includeCategories = false,
       includeTags = false,
-      treeTextFormat = '$path: $title',
+      treeTextFormat = '$path: $title - $summary',
       maxNodes = 1000
     } = options
     
@@ -295,7 +295,7 @@ export class ReadTools {
       includeSummary = false,
       includeCategories = false,
       includeTags = false,
-      treeTextFormat = '$path: $title',
+      treeTextFormat = '$path: $title - $summary',
       maxNodes = 1000
     } = options
     

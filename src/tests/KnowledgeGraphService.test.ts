@@ -266,9 +266,11 @@ summary: 機能1の説明
       // features は仮想ディレクトリなので除外される
       expect(treeText).not.toContain('features:')
       expect(treeText).toContain('feature1:')
-      // デフォルトフォーマットは "$path: $title" なので title が表示される
+      // デフォルトフォーマットは "$path: $title - $summary" なので title と summary が表示される
       expect(treeText).toContain('プロジェクト概要')  // title
+      expect(treeText).toContain('プロジェクトのトップページ')  // summary
       expect(treeText).toContain('機能1')  // title
+      expect(treeText).toContain('機能1の説明')  // summary
     })
     
     it('should get context tree in flat style', async () => {

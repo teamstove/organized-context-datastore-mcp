@@ -165,7 +165,7 @@ Tree 表示のフォーマットを設定：
 ```javascript
 export default {
   contextRoots: [...],
-  treeTextFormat: '$path: $title'  // デフォルト
+  treeTextFormat: '$path: $title - $summary'  // デフォルト
 }
 ```
 
