@@ -484,11 +484,10 @@ export class WriteTools {
   }
   
   /**
-   * タイトルをスラッグ化
+   * タイトルをスラッグ化（大文字は維持）
    */
   private slugify(title: string): string {
     return title
-      .toLowerCase()
       .replace(/[^\w\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]+/g, '-')
       .replace(/^-+|-+$/g, '')
   }

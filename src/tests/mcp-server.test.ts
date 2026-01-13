@@ -195,7 +195,7 @@ tags:
       expect(result.errors).toBe(0)
       expect(result.results[0].success).toBe(true)
       expect(result.results[0].type).toBe('create')
-      expect(result.results[0].path).toContain('new-feature')
+      expect(result.results[0].path).toContain('New-Feature')
     })
     
     it('should handle mutateContext with update operation', async () => {
