@@ -81,17 +81,17 @@ describe('CompositeStore', () => {
       await store.write('data/item1.md', '# Item 1')
       
       // 各ストアに正しく保存されていることを確認
-      const docsContent = await fs.readFile(path.join(docsDir, 'docs/intro.md'), 'utf-8')
+      // （id プレフィックスを除去した相対パスで保存される）
+      const docsContent = await fs.readFile(path.join(docsDir, 'intro.md'), 'utf-8')
       expect(docsContent).toBe('# Introduction')
       
-      const dataContent = await fs.readFile(path.join(dataDir, 'data/item1.md'), 'utf-8')
+      const dataContent = await fs.readFile(path.join(dataDir, 'item1.md'), 'utf-8')
       expect(dataContent).toBe('# Item 1')
     })
     
     it('読み取りが正しいストアから行われる', async () => {
-      // 事前にファイルを作成
-      await fs.mkdir(path.join(docsDir, 'docs'), { recursive: true })
-      await fs.writeFile(path.join(docsDir, 'docs/readme.md'), '# README')
+      // 事前にファイルを作成（storagePath の直下）
+      await fs.writeFile(path.join(docsDir, 'readme.md'), '# README')
       
       // CompositeStore から読み取り
       const content = await store.read('docs/readme.md')
@@ -99,8 +99,8 @@ describe('CompositeStore', () => {
     })
     
     it('exists が正しいストアをチェックする', async () => {
-      await fs.mkdir(path.join(docsDir, 'docs'), { recursive: true })
-      await fs.writeFile(path.join(docsDir, 'docs/exists.md'), 'exists')
+      // storagePath の直下にファイルを作成
+      await fs.writeFile(path.join(docsDir, 'exists.md'), 'exists')
       
       expect(await store.exists('docs/exists.md')).toBe(true)
       expect(await store.exists('docs/not-exists.md')).toBe(false)
@@ -108,8 +108,8 @@ describe('CompositeStore', () => {
     })
     
     it('delete が正しいストアから削除する', async () => {
-      await fs.mkdir(path.join(dataDir, 'data'), { recursive: true })
-      await fs.writeFile(path.join(dataDir, 'data/to-delete.md'), 'delete me')
+      // storagePath の直下にファイルを作成
+      await fs.writeFile(path.join(dataDir, 'to-delete.md'), 'delete me')
       
       expect(await store.exists('data/to-delete.md')).toBe(true)
       
@@ -154,13 +154,11 @@ describe('CompositeStore', () => {
       
       await store.initialize()
       
-      // テストデータを作成
-      await fs.mkdir(path.join(docsDir, 'docs'), { recursive: true })
-      await fs.mkdir(path.join(dataDir, 'data'), { recursive: true })
-      await fs.writeFile(path.join(docsDir, 'docs/a.md'), 'doc a')
-      await fs.writeFile(path.join(docsDir, 'docs/b.md'), 'doc b')
-      await fs.writeFile(path.join(dataDir, 'data/x.md'), 'data x')
-      await fs.writeFile(path.join(dataDir, 'data/y.md'), 'data y')
+      // テストデータを作成（storagePath の直下に作成）
+      await fs.writeFile(path.join(docsDir, 'a.md'), 'doc a')
+      await fs.writeFile(path.join(docsDir, 'b.md'), 'doc b')
+      await fs.writeFile(path.join(dataDir, 'x.md'), 'data x')
+      await fs.writeFile(path.join(dataDir, 'y.md'), 'data y')
     })
     
     afterAll(async () => {
@@ -246,7 +244,8 @@ describe('CompositeStore', () => {
       expect(await store.read('data/moved.md')).toBe('# To Move')
       
       // 実際に異なるディレクトリに保存されていることを確認
-      const movedContent = await fs.readFile(path.join(dataDir, 'data/moved.md'), 'utf-8')
+      // （id プレフィックスを除去した相対パスで保存される）
+      const movedContent = await fs.readFile(path.join(dataDir, 'moved.md'), 'utf-8')
       expect(movedContent).toBe('# To Move')
     })
   })
@@ -258,9 +257,8 @@ describe('CompositeStore', () => {
       await fs.rm(docsDir, { recursive: true, force: true })
       await fs.mkdir(docsDir, { recursive: true })
       
-      // テストデータを作成
-      await fs.mkdir(path.join(docsDir, 'readonly'), { recursive: true })
-      await fs.writeFile(path.join(docsDir, 'readonly/protected.md'), '# Protected')
+      // テストデータを作成（storagePath の直下に作成）
+      await fs.writeFile(path.join(docsDir, 'protected.md'), '# Protected')
       
       const contextRoots: ContextRootConfig[] = [
         {

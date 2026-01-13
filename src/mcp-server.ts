@@ -132,7 +132,6 @@ export async function createMcpServer(
   // stderr にログ出力（MCPはstdoutを使うため）
   console.error(`[OCD-MCP] Storage: ${storagePath}`)
   console.error(`[OCD-MCP] Context Roots: ${config.contextRoots.map(r => r.name).join(', ')}`)
-  console.error(`[OCD-MCP] Version Mode: ${config.versionControlMode}`)
   console.error(`[OCD-MCP] Server Mode: ${serverMode.type} (readonly: ${serverMode.readonly})`)
   
   // Knowledge Graph Service 初期化

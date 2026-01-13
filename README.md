@@ -158,6 +158,26 @@ Context Root 毎に Git コミットの挙動を設定：
 | `'manual'` | `commit` ツールで明示的にコミット（**デフォルト**） |
 | `'none'` | Git を使用しない |
 
+### treeTextFormat 設定
+
+Tree 表示のフォーマットを設定：
+
+```javascript
+export default {
+  contextRoots: [...],
+  treeTextFormat: '$path: $title'  // デフォルト
+}
+```
+
+使用可能な変数：
+| 変数 | 説明 |
+|------|------|
+| `$path` | 相対パス |
+| `$title` | タイトル |
+| `$summary` | サマリー |
+| `$categories` | カテゴリ（カンマ区切り） |
+| `$tags` | タグ（カンマ区切り） |
+
 > **Note**: `readOnly: true` の Context Root は書き込みしないため `git` 設定は無視されます。
 
 ## 📖 特徴

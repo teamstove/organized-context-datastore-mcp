@@ -5,6 +5,7 @@
  * ReadTools と WriteTools を統合し、MCPサーバーとして公開可能な形で提供
  */
 
+import * as path from 'node:path'
 import type { 
   ContextNode,
   ContextNodeSummary,
@@ -46,7 +47,6 @@ export class KnowledgeGraphService {
     this.readTools = new ReadTools(this.store, config.contextRoots)
     
     const writeConfig: WriteToolsConfig = {
-      versionControlMode: config.versionControlMode,
       writePermission: config.writePermission,
       contextRoots: config.contextRoots
     }
@@ -59,28 +59,24 @@ export class KnowledgeGraphService {
    * Context Root に個別ストレージ設定がある場合は CompositeStore を使用
    */
   private createStore(config: KnowledgeGraphMCPConfig): IKnowledgeStore {
-    // Context Root に個別ストレージ設定があるか確認
-    const hasIndividualStorage = config.contextRoots.some(
-      root => root.storageType !== undefined
-    )
+    // デフォルトの Git モード（各 Context Root の git 設定で上書き可能）
+    const defaultGitMode = 'manual' as const
     
-    // versionControlMode → git モードの変換（後方互換）
-    const defaultGitMode = config.versionControlMode === 'immediate' ? 'auto-commit' as const : 'manual' as const
-    
-    // 個別ストレージ設定がある場合は CompositeStore を使用
-    if (hasIndividualStorage) {
-      console.log('[KnowledgeGraphService] CompositeStore を使用 (Context Root 個別ストレージ)')
+    // 複数の Context Root がある場合は CompositeStore を使用
+    // （storageType が明示されていなくても、各 contextRoot.path をストレージとして使用）
+    if (config.contextRoots.length > 0) {
+      console.error('[KnowledgeGraphService] CompositeStore を使用 (複数 Context Root)')
       
       return new CompositeStore({
         contextRoots: config.contextRoots,
-        defaultStorageType: config.storageType,
+        defaultStorageType: config.storageType || 'file-git',
         defaultStoragePath: config.storagePath,
         defaultConnectionString: config.connectionString,
         defaultGitMode
       })
     }
     
-    // 通常の単一ストア
+    // コンテキストルートがない場合は単一ストア
     if (config.storageType === 'file-git') {
       return new FileGitStore({
         rootPath: config.storagePath,
@@ -443,13 +439,18 @@ export function createKnowledgeGraphService(
   storagePath: string,
   contextRoots: ContextRootConfig[] = []
 ): KnowledgeGraphService {
+  // contextRoots の相対パスを絶対パスに解決
+  const resolvedContextRoots = contextRoots.map(root => ({
+    ...root,
+    path: path.isAbsolute(root.path) ? root.path : path.resolve(storagePath, root.path)
+  }))
+  
   return new KnowledgeGraphService({
     storagePath,
     storageType: 'file-git',
-    versionControlMode: 'immediate',
     writePermission: {
       mode: 'unrestricted'
     },
-    contextRoots
+    contextRoots: resolvedContextRoots
   })
 }

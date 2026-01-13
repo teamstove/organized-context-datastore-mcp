@@ -111,7 +111,6 @@ export type {
   // Config Types
   KnowledgeGraphMCPConfig,
   ContextRootConfig,
-  VersionControlMode,
   WritePermissionConfig,
 } from './types/index.js'
 

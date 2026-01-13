@@ -21,7 +21,6 @@ import { pathToFileURL } from 'node:url'
 import type { 
   KnowledgeGraphMCPConfig, 
   ContextRootConfig,
-  VersionControlMode,
   WritePermissionConfig,
   GlobalConfig,
   LocalConfig,
@@ -63,9 +62,6 @@ export interface ConfigFile {
   
   /** Context Roots を自動検出するか (default: true) */
   autoDetectRoots?: boolean
-  
-  /** バージョン管理モード (default: immediate) */
-  versionControlMode?: VersionControlMode
   
   /** 書き込み権限設定 */
   writePermission?: WritePermissionConfig
@@ -141,7 +137,6 @@ export class ConfigLoader {
     return {
       storagePath: this.storagePath,
       storageType: 'file-git',
-      versionControlMode: configFile.versionControlMode ?? 'immediate',
       writePermission,
       contextRoots
     }
@@ -465,10 +460,16 @@ export async function resolveConfigFromCwd(cwd: string): Promise<ResolvedConfig>
     // Context Roots を解決
     const contextRoots: ContextRootConfig[] = []
     
-    // ローカル Context Roots
+    // ローカル Context Roots（重複検出付き）
     if (localConfig.contextRoots) {
+      const seenIds = new Set<string>()
       for (const root of localConfig.contextRoots) {
-        contextRoots.push(resolveLocalContextRoot(root, projectDir))
+        const resolved = resolveLocalContextRoot(root, projectDir)
+        if (seenIds.has(resolved.id)) {
+          console.error(`[OCD-MCP] Warning: Duplicate id "${resolved.id}" in contextRoots. Consider adding explicit id to avoid conflicts.`)
+        }
+        seenIds.add(resolved.id)
+        contextRoots.push(resolved)
       }
     }
     
@@ -485,7 +486,6 @@ export async function resolveConfigFromCwd(cwd: string): Promise<ResolvedConfig>
     return {
       configPath,
       contextRoots,
-      versionControlMode: localConfig.versionControlMode ?? 'immediate',
       writePermission: localConfig.writePermission ?? { mode: 'unrestricted' }
     }
   }
@@ -509,7 +509,6 @@ export async function resolveConfigFromCwd(cwd: string): Promise<ResolvedConfig>
   
   return {
     contextRoots,
-    versionControlMode: 'immediate',
     writePermission: { mode: 'unrestricted' }
   }
 }
@@ -569,7 +568,6 @@ export function resolvedConfigToMcpConfig(resolved: ResolvedConfig, storagePath:
   return {
     storagePath,
     storageType: 'file-git',
-    versionControlMode: resolved.versionControlMode,
     writePermission: resolved.writePermission,
     contextRoots: resolved.contextRoots
   }

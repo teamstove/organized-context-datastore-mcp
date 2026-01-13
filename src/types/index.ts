@@ -191,14 +191,30 @@ export interface GetContextTreeOptions {
    */
   treeStyle?: 'nested' | 'flat'
   
-  /** summary を含めるか (tree-text のみ有効, default: true) */
+  /** summary を含めるか (tree-text のみ有効, treeTextFormat 未指定時のみ有効, default: false) */
   includeSummary?: boolean
   
-  /** categories を含めるか (tree-text のみ有効, default: true) */
+  /** categories を含めるか (tree-text のみ有効, treeTextFormat 未指定時のみ有効, default: false) */
   includeCategories?: boolean
   
-  /** tags を含めるか (tree-text のみ有効, default: true) */
+  /** tags を含めるか (tree-text のみ有効, treeTextFormat 未指定時のみ有効, default: false) */
   includeTags?: boolean
+  
+  /**
+   * tree-text 形式の表示フォーマット
+   * 
+   * 使用可能な変数:
+   * - $path: 相対パス
+   * - $title: タイトル
+   * - $summary: サマリー
+   * - $categories: カテゴリ (カンマ区切り)
+   * - $tags: タグ (カンマ区切り)
+   * 
+   * @example "$path: $title"
+   * @example "$path: $summary [$categories]"
+   * @default "$path: $title"
+   */
+  treeTextFormat?: string
   
   /** 返却ノード数上限 (default: 1000) */
   maxNodes?: number
@@ -603,14 +619,6 @@ export interface VersionEntry {
 // =============================================================================
 
 /**
- * バージョン管理モード
- */
-export type VersionControlMode = 
-  | 'immediate'      // 即時反映
-  | 'draft_commit'   // DRAFT → commit
-  | 'approval_flow'  // edit → commit → approve → merge
-
-/**
  * 書き込み権限設定
  */
 export interface WritePermissionConfig {
@@ -647,14 +655,14 @@ export interface KnowledgeGraphMCPConfig {
    */
   connectionString?: string
   
-  /** バージョン管理モード */
-  versionControlMode: VersionControlMode
-  
   /** 書き込み権限 */
   writePermission: WritePermissionConfig
   
   /** Context Roots 設定 */
   contextRoots: ContextRootConfig[]
+  
+  /** tree-text 形式の表示フォーマット (default: "$path: $title") */
+  treeTextFormat?: string
 }
 
 /**
@@ -827,11 +835,24 @@ export interface LocalConfig {
   /** グローバル設定を継承するか（デフォルト: true） */
   inheritGlobal?: boolean
   
-  /** バージョン管理モード */
-  versionControlMode?: VersionControlMode
-  
   /** 書き込み権限設定 */
   writePermission?: WritePermissionConfig
+  
+  /**
+   * tree-text 形式の表示フォーマット
+   * 
+   * 使用可能な変数:
+   * - $path: 相対パス
+   * - $title: タイトル
+   * - $summary: サマリー
+   * - $categories: カテゴリ (カンマ区切り)
+   * - $tags: タグ (カンマ区切り)
+   * 
+   * @example "$path: $title"
+   * @example "$path: $summary [$categories]"
+   * @default "$path: $title"
+   */
+  treeTextFormat?: string
 }
 
 /**
@@ -876,9 +897,9 @@ export interface ResolvedConfig {
   /** 解決済み Context Roots */
   contextRoots: ContextRootConfig[]
   
-  /** バージョン管理モード */
-  versionControlMode: VersionControlMode
-  
   /** 書き込み権限設定 */
   writePermission: WritePermissionConfig
+  
+  /** tree-text 形式の表示フォーマット */
+  treeTextFormat?: string
 }

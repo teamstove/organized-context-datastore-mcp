@@ -41,8 +41,83 @@ export class ReadTools {
   /**
    * 利用可能な Context Root 一覧を取得
    */
-  async listContextRoots(): Promise<ContextRootConfig[]> {
-    return this.contextRoots
+  async listContextRoots(): Promise<(ContextRootConfig & { rootPath: string })[]> {
+    // rootPath フィールドを追加（他のツールで使用するパス = id）
+    return this.contextRoots.map(root => ({
+      ...root,
+      rootPath: root.id
+    }))
+  }
+
+  // ==========================================================================
+  // パス解決ユーティリティ
+  // ==========================================================================
+  
+  /**
+   * rootPath を絶対パスに解決
+   * 
+   * 以下の順序でマッチングを行う：
+   * 1. contextRoots の id に完全一致 → その path を返す
+   * 2. contextRoots の path に完全一致 → そのまま返す
+   * 3. contextRoots の path のプレフィックスに一致 → そのまま返す
+   * 4. 一致しない場合 → そのまま返す（デフォルトストアで処理）
+   * 
+   * @param rootPath id または相対/絶対パス
+   * @returns 解決された絶対パス
+   */
+  resolveRootPath(rootPath: string): string {
+    // 1. id に完全一致する Context Root を探す
+    const matchById = this.contextRoots.find(root => root.id === rootPath)
+    if (matchById) {
+      return matchById.path
+    }
+    
+    // 2. path に完全一致する Context Root を探す
+    const matchByPath = this.contextRoots.find(root => root.path === rootPath)
+    if (matchByPath) {
+      return matchByPath.path
+    }
+    
+    // 3. path のプレフィックスに一致する Context Root を探す
+    const matchByPrefix = this.contextRoots.find(root => 
+      rootPath.startsWith(root.path + '/') || rootPath.startsWith(root.id + '/')
+    )
+    if (matchByPrefix) {
+      // id プレフィックスの場合、id 部分を path に置換
+      if (rootPath.startsWith(matchByPrefix.id + '/')) {
+        return matchByPrefix.path + rootPath.slice(matchByPrefix.id.length)
+      }
+      return rootPath
+    }
+    
+    // 4. マッチしない場合はそのまま返す
+    return rootPath
+  }
+  
+  /**
+   * パターン配列内の id プレフィックスを絶対パスに変換
+   * 
+   * @param patterns パターン配列 (例: ['src/**', 'docs/*'])
+   * @returns 変換されたパターン配列
+   */
+  resolvePatterns(patterns: string[]): string[] {
+    return patterns.map(pattern => {
+      // パターンのプレフィックス部分を抽出
+      const firstSlash = pattern.indexOf('/')
+      const prefix = firstSlash > 0 ? pattern.slice(0, firstSlash) : pattern.split('*')[0]
+      
+      // id に一致する Context Root を探す
+      const matchById = this.contextRoots.find(root => root.id === prefix)
+      if (matchById) {
+        // id 部分を path に置換
+        if (firstSlash > 0) {
+          return matchById.path + pattern.slice(firstSlash)
+        }
+        return matchById.path + pattern.slice(prefix.length)
+      }
+      
+      return pattern
+    })
   }
   
   // ==========================================================================
@@ -75,7 +150,7 @@ export class ReadTools {
   async getContexts(options: GetContextsOptions): Promise<ContextNode[]> {
     const { patterns, filter, includeContent = true } = options
     
-    // 1. パターンでファイル一覧取得
+    // 1. パターンでファイル一覧取得（CompositeStore が id でルーティング）
     const files = await this.store.listMultiple(patterns)
     
     // 2. 各ファイルをパース
@@ -140,9 +215,11 @@ export class ReadTools {
       depth,
       format = 'tree-text',
       treeStyle = 'flat',
-      includeSummary = true,
-      includeCategories = true,
-      includeTags = true,
+      // デフォルトフォーマット: "$path: $title" (includeSummary 等は false)
+      includeSummary = false,
+      includeCategories = false,
+      includeTags = false,
+      treeTextFormat = '$path: $title',
       maxNodes = 1000
     } = options
     
@@ -153,6 +230,7 @@ export class ReadTools {
       let truncated = false
       
       for (const rootPath of rootPaths) {
+        // id はそのまま使用（CompositeStore が id でルーティング）
         const result = await this.getContextTreeSingle({
           rootPath,
           depth,
@@ -161,6 +239,7 @@ export class ReadTools {
           includeSummary,
           includeCategories,
           includeTags,
+          treeTextFormat,
           maxNodes
         })
         results.push(result)
@@ -180,6 +259,7 @@ export class ReadTools {
       throw new Error('rootPath or rootPaths is required')
     }
     
+    // id はそのまま使用（CompositeStore が id でルーティング）
     return this.getContextTreeSingle({
       rootPath: singleRootPath,
       depth,
@@ -188,6 +268,7 @@ export class ReadTools {
       includeSummary,
       includeCategories,
       includeTags,
+      treeTextFormat,
       maxNodes
     })
   }
@@ -203,6 +284,7 @@ export class ReadTools {
     includeSummary?: boolean
     includeCategories?: boolean
     includeTags?: boolean
+    treeTextFormat?: string
     maxNodes?: number
   }): Promise<ContextTreeResult> {
     const { 
@@ -210,9 +292,10 @@ export class ReadTools {
       depth,
       format = 'tree-text',
       treeStyle = 'flat',
-      includeSummary = true,
-      includeCategories = true,
-      includeTags = true,
+      includeSummary = false,
+      includeCategories = false,
+      includeTags = false,
+      treeTextFormat = '$path: $title',
       maxNodes = 1000
     } = options
     
@@ -236,15 +319,12 @@ export class ReadTools {
       }
     }
     
-    // 中間ディレクトリノードを生成（index.md がないディレクトリ用）
-    const summariesWithDirs = this.ensureIntermediateDirectories(rootPath, summaries)
-    
     // パスでソート (深さ優先、同階層はアルファベット順)
-    summariesWithDirs.sort((a, b) => a.path.localeCompare(b.path))
+    summaries.sort((a, b) => a.path.localeCompare(b.path))
     
-    const totalNodes = summariesWithDirs.length
+    const totalNodes = summaries.length
     const truncated = totalNodes > maxNodes
-    const limitedSummaries = truncated ? summariesWithDirs.slice(0, maxNodes) : summariesWithDirs
+    const limitedSummaries = truncated ? summaries.slice(0, maxNodes) : summaries
     
     // フォーマットに応じて出力
     if (format === 'json') {
@@ -261,7 +341,7 @@ export class ReadTools {
     const treeText = this.renderTreeText(
       rootPath,
       limitedSummaries,
-      { treeStyle, includeSummary, includeCategories, includeTags }
+      { treeStyle, includeSummary, includeCategories, includeTags, treeTextFormat }
     )
     
     return {
@@ -394,21 +474,25 @@ export class ReadTools {
       includeSummary: boolean
       includeCategories: boolean
       includeTags: boolean
+      treeTextFormat: string
     }
   ): string {
-    const { treeStyle, includeSummary, includeCategories, includeTags } = options
+    const { treeStyle, includeSummary, includeCategories, includeTags, treeTextFormat } = options
     
     // フラット形式の場合
     if (treeStyle === 'flat') {
-      return this.renderTreeTextFlat(rootPath, summaries, { includeSummary, includeCategories, includeTags })
+      return this.renderTreeTextFlat(rootPath, summaries, { includeSummary, includeCategories, includeTags, treeTextFormat })
     }
     
     // ネスト形式
-    return this.renderTreeTextNested(rootPath, summaries, { includeSummary, includeCategories, includeTags })
+    return this.renderTreeTextNested(rootPath, summaries, { includeSummary, includeCategories, includeTags, treeTextFormat })
   }
   
   /**
    * フラット形式でレンダリング
+   * 
+   * treeTextFormat が指定されている場合はフォーマット文字列を使用
+   * 使用可能な変数: $path, $title, $summary, $categories, $tags
    */
   private renderTreeTextFlat(
     rootPath: string,
@@ -417,9 +501,10 @@ export class ReadTools {
       includeSummary: boolean
       includeCategories: boolean
       includeTags: boolean
+      treeTextFormat: string
     }
   ): string {
-    const { includeSummary, includeCategories, includeTags } = options
+    const { treeTextFormat } = options
     const lines: string[] = []
     lines.push(`[${rootPath}] (${summaries.length} nodes)`)
     
@@ -428,26 +513,32 @@ export class ReadTools {
       const relativePath = this.normalizePathForTree(summary.path)
         .replace(new RegExp(`^${rootPath}/`), '')
       
-      // メタデータ
-      const metaParts: string[] = []
-      if (includeCategories && summary.categories.length > 0) {
-        metaParts.push(`cat:${summary.categories.join(',')}`)
-      }
-      if (includeTags && summary.tags.length > 0) {
-        metaParts.push(`tags:${summary.tags.join(',')}`)
-      }
-      if (summary.childCount > 0) {
-        metaParts.push(`chi:${summary.childCount}`)
-      }
-      const metaStr = metaParts.length > 0 ? ` [${metaParts.join('|')}]` : ''
-      
-      // summary 部分
-      const summaryStr = includeSummary ? `: ${summary.summary}` : ''
-      
-      lines.push(`${relativePath}${summaryStr}${metaStr}`)
+      // フォーマット文字列を使ってレンダリング
+      const line = this.formatTreeLine(relativePath, summary, treeTextFormat)
+      lines.push(line)
     }
     
     return lines.join('\n')
+  }
+  
+  /**
+   * フォーマット文字列を使って1行をレンダリング
+   * 
+   * @param relativePath 相対パス
+   * @param summary サマリー
+   * @param format フォーマット文字列 (例: "$path: $title")
+   */
+  private formatTreeLine(
+    relativePath: string,
+    summary: ContextNodeSummary,
+    format: string
+  ): string {
+    return format
+      .replace(/\$path/g, relativePath)
+      .replace(/\$title/g, summary.title)
+      .replace(/\$summary/g, summary.summary)
+      .replace(/\$categories/g, summary.categories.join(','))
+      .replace(/\$tags/g, summary.tags.join(','))
   }
   
   /**
@@ -460,9 +551,10 @@ export class ReadTools {
       includeSummary: boolean
       includeCategories: boolean
       includeTags: boolean
+      treeTextFormat: string
     }
   ): string {
-    const { includeSummary, includeCategories, includeTags } = options
+    const { treeTextFormat } = options
     
     // ツリー構造を構築
     interface TreeNode {
@@ -547,29 +639,11 @@ export class ReadTools {
       // ブランチ記号
       const branch = isLast ? '└' : '├'
       
-      // メタデータ部分を構築
-      const metaParts: string[] = []
-      
-      if (includeCategories && summary.categories.length > 0) {
-        metaParts.push(`cat:${summary.categories.join(',')}`)
-      }
-      
-      if (includeTags && summary.tags.length > 0) {
-        metaParts.push(`tags:${summary.tags.join(',')}`)
-      }
-      
-      // 子ノード数は children の実際の数を使用
-      if (children.length > 0) {
-        metaParts.push(`chi:${children.length}`)
-      }
-      
-      const metaStr = metaParts.length > 0 ? ` [${metaParts.join('|')}]` : ''
-      
-      // summary 部分
-      const summaryStr = includeSummary ? `: ${summary.summary}` : ''
+      // フォーマット文字列を使ってレンダリング ($path を displayName に置換)
+      const formattedContent = this.formatTreeLine(displayName, summary, treeTextFormat)
       
       // 行を構築
-      lines.push(`${prefix}${branch} ${displayName}${summaryStr}${metaStr}`)
+      lines.push(`${prefix}${branch} ${formattedContent}`)
       
       // 子ノードをレンダリング
       const childPrefix = prefix + (isLast ? '  ' : '│ ')

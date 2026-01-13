@@ -119,6 +119,17 @@ export default {
 | `contextRoots` | array | - | Context Roots 設定 |
 | `inheritGlobal` | boolean | true | グローバル設定を継承するか |
 | `writePermission` | object | unrestricted | 書き込み権限設定 |
+| `treeTextFormat` | string | `"$path: $title"` | Tree 表示のフォーマット |
+
+### treeTextFormat 変数
+
+| 変数 | 説明 |
+|------|------|
+| `$path` | 相対パス |
+| `$title` | タイトル |
+| `$summary` | サマリー |
+| `$categories` | カテゴリ（カンマ区切り） |
+| `$tags` | タグ（カンマ区切り） |
 
 ### contextRoots 項目
 

@@ -88,11 +88,12 @@ export class CompositeStore implements IKnowledgeStore {
     }
     
     // 各 Context Root のストアを作成
+    // prefix には id を使用し、ユーザーは id でパスを指定できる
     for (const contextRoot of config.contextRoots) {
       const store = this.createStoreForContextRoot(contextRoot)
       if (store) {
         this.routes.push({
-          prefix: contextRoot.path,
+          prefix: contextRoot.id,  // ← id でルーティング
           store,
           config: contextRoot
         })
@@ -136,12 +137,14 @@ export class CompositeStore implements IKnowledgeStore {
    * Context Root 用のストアを作成
    */
   private createStoreForContextRoot(contextRoot: ContextRootConfig): IKnowledgeStore | null {
-    const storageType = contextRoot.storageType || this.config.defaultStorageType
+    const storageType = contextRoot.storageType || this.config.defaultStorageType || 'file-git'
     
     if (storageType === 'file-git') {
-      const storagePath = contextRoot.storagePath || this.config.defaultStoragePath
+      // storagePath がない場合は contextRoot.path を使用
+      // （ほとんどのケースでは path がそのままストレージ場所になる）
+      const storagePath = contextRoot.storagePath || contextRoot.path || this.config.defaultStoragePath
       if (!storagePath) {
-        console.warn(`[CompositeStore] Context Root "${contextRoot.id}" has no storagePath, skipping`)
+        console.warn(`[CompositeStore] Context Root "${contextRoot.id}" has no storagePath or path, skipping`)
         return null
       }
       
@@ -186,14 +189,18 @@ export class CompositeStore implements IKnowledgeStore {
     // 各ルートをチェック (長い prefix から順に)
     for (const route of this.routes) {
       if (path === route.prefix || path.startsWith(route.prefix + '/')) {
-        // Context Root 固有のストレージがある場合
-        if (route.config.storageType) {
-          // パスをそのまま使用 (ストア内でのパス)
-          return {
-            store: route.store,
-            relativePath: path,
-            contextRoot: route.config
-          }
+        // id プレフィックスを除去して相対パスに変換
+        let relativePath = path
+        if (path.startsWith(route.prefix + '/')) {
+          relativePath = path.slice(route.prefix.length + 1)
+        } else if (path === route.prefix) {
+          relativePath = ''
+        }
+        
+        return {
+          store: route.store,
+          relativePath,
+          contextRoot: route.config
         }
       }
     }
@@ -206,8 +213,10 @@ export class CompositeStore implements IKnowledgeStore {
       }
     }
     
+    // 利用可能な Context Root id をエラーメッセージに含める
+    const availableIds = this.routes.map(r => r.prefix).join(', ')
     throw new KnowledgeStoreError(
-      `No store found for path: ${path}`,
+      `Invalid path: "${path}". Path must start with a Context Root id. Available ids: ${availableIds}`,
       'INVALID_PATH',
       path
     )
@@ -270,7 +279,7 @@ export class CompositeStore implements IKnowledgeStore {
     await Promise.all(initPromises)
     this.initialized = true
     
-    console.log(`[CompositeStore] 初期化完了: ${this.routes.length} ルート`)
+    console.error(`[CompositeStore] 初期化完了: ${this.routes.length} ルート`)
   }
   
   async close(): Promise<void> {
@@ -288,7 +297,7 @@ export class CompositeStore implements IKnowledgeStore {
     await Promise.all(closePromises)
     this.initialized = false
     
-    console.log(`[CompositeStore] クローズ完了`)
+    console.error(`[CompositeStore] クローズ完了`)
   }
   
   // ==========================================================================
@@ -317,21 +326,52 @@ export class CompositeStore implements IKnowledgeStore {
     const results: string[] = []
     
     // 各ストアに並列でクエリ
-    const listPromises: Promise<string[]>[] = []
+    const listPromises: Promise<{ prefix: string, files: string[] }[]>[] = []
     
     for (const [store, storePatternList] of storePatterns) {
-      listPromises.push(store.listMultiple(storePatternList))
+      // このストアに対応するルートを探す
+      const route = this.routes.find(r => r.store === store)
+      
+      if (route) {
+        // パターンから id プレフィックスを除去して相対パスに変換
+        const relativePatterns = storePatternList.map(pattern => {
+          if (pattern.startsWith(route.prefix + '/')) {
+            return pattern.slice(route.prefix.length + 1)
+          } else if (pattern === route.prefix) {
+            return '**/*.md'
+          }
+          return pattern
+        })
+        
+        // クエリを実行し、結果に id プレフィックスを追加
+        listPromises.push(
+          store.listMultiple(relativePatterns).then(files => 
+            [{ prefix: route.prefix, files }]
+          )
+        )
+      } else if (this.defaultStore && store === this.defaultStore) {
+        // デフォルトストアの場合はパターンをそのまま使用
+        listPromises.push(
+          store.listMultiple(storePatternList).then(files => 
+            [{ prefix: '', files }]
+          )
+        )
+      }
     }
     
     const allResults = await Promise.all(listPromises)
     
-    // 結果をマージ (重複除去)
+    // 結果をマージ (重複除去、id プレフィックスを追加)
     const seen = new Set<string>()
-    for (const storeResults of allResults) {
-      for (const path of storeResults) {
-        if (!seen.has(path)) {
-          seen.add(path)
-          results.push(path)
+    for (const resultGroup of allResults) {
+      for (const { prefix, files } of resultGroup) {
+        for (const file of files) {
+          // id プレフィックスを追加
+          const fullPath = prefix ? `${prefix}/${file}` : file
+          if (!seen.has(fullPath)) {
+            seen.add(fullPath)
+            results.push(fullPath)
+          }
         }
       }
     }
@@ -411,7 +451,7 @@ export class CompositeStore implements IKnowledgeStore {
     }
     
     // 異なるストア間の移動 (コピー + 削除)
-    console.log(`[CompositeStore] クロスストア移動: ${fromPath} -> ${toPath}`)
+    console.error(`[CompositeStore] クロスストア移動: ${fromPath} -> ${toPath}`)
     
     // コンテンツを読み取り
     const content = await fromRoute.store.read(fromRoute.relativePath)

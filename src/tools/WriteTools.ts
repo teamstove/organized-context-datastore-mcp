@@ -14,7 +14,6 @@ import type {
   UpdateContextOperation,
   ContentUpdate,
   WritePermissionConfig,
-  VersionControlMode,
   ContextMutation,
   MutationResult,
   MutationOperationResult,
@@ -29,9 +28,6 @@ const SYSTEM_DEFAULT_EXTENSION = '.md'
  * 書き込みツール設定
  */
 export interface WriteToolsConfig {
-  /** バージョン管理モード */
-  versionControlMode: VersionControlMode
-  
   /** 書き込み権限 */
   writePermission: WritePermissionConfig
   
@@ -109,8 +105,8 @@ export class WriteTools {
             results.push({
               type: 'create',
               path: createResult.path,
-              success: true,
-              result: createResult.node
+              success: true
+              // result は Token 効率のため省略
             })
             affectedPaths.push(createResult.path + '.md')
             successCount++
@@ -130,8 +126,8 @@ export class WriteTools {
             results.push({
               type: 'update',
               path: op.path,
-              success: true,
-              result: updateResult
+              success: true
+              // result は Token 効率のため省略
             })
             affectedPaths.push(op.path + '.md')
             successCount++
@@ -160,8 +156,8 @@ export class WriteTools {
             results.push({
               type: 'move',
               path: op.to,
-              success: true,
-              result: moveResult
+              success: true
+              // result は Token 効率のため省略
             })
             affectedPaths.push(op.path, op.to)
             successCount++
@@ -183,11 +179,7 @@ export class WriteTools {
       }
     }
     
-    // バージョン管理 (一括コミット)
-    if (this.config.versionControlMode === 'immediate' && affectedPaths.length > 0) {
-      const message = this.generateCommitMessage(results.filter(r => r.success))
-      await this.store.commit(message)
-    }
+    // 注: 自動コミットは各 Context Root の git 設定に従って FileGitStore.write で行われる
     
     return {
       success: successCount,
@@ -386,13 +378,6 @@ export class WriteTools {
    * @returns コミットハッシュ
    */
   async commit(message: string, paths?: string[]): Promise<string> {
-    if (this.config.versionControlMode === 'immediate') {
-      throw new WriteError(
-        'commit() is not available in immediate mode',
-        'INVALID_OPERATION'
-      )
-    }
-    
     return this.store.commit(message, paths)
   }
   

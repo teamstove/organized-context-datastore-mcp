@@ -204,7 +204,6 @@ export class ProjectRegistry {
       storagePath: projectConfig.storagePath || '',
       storageType: projectConfig.storageType,
       connectionString,
-      versionControlMode: 'immediate',
       writePermission: projectConfig.writePermission || {
         mode: 'unrestricted'
       },

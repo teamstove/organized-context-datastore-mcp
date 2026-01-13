@@ -31,8 +31,10 @@ describe('KnowledgeGraphService', () => {
   })
   
   beforeEach(async () => {
-    // 各テスト前にテストデータをセットアップ
+    // 各テスト前にテストデータをクリーンアップ＆セットアップ
     const projectDir = path.join(TEST_DIR, 'project')
+    // 前のテストで作成されたファイルを削除
+    await fs.rm(projectDir, { recursive: true, force: true })
     await fs.mkdir(projectDir, { recursive: true })
   })
   
@@ -58,14 +60,12 @@ describe('KnowledgeGraphService', () => {
         tags: ['Phase1']
       }])
       
-      // 結果は MutationResult 形式
+      // 結果は MutationResult 形式（Token 効率のため result は省略）
       expect(result.success).toBe(1)
       expect(result.errors).toBe(0)
       expect(result.results[0].success).toBe(true)
-      expect(result.results[0].result?.title).toBe('テスト機能')
-      expect(result.results[0].result?.summary).toBe('これはテスト機能です')
-      expect(result.results[0].result?.categories).toContain('feature-spec')
-      expect(result.results[0].result?.tags).toContain('Phase1')
+      expect(result.results[0].type).toBe('create')
+      expect(result.results[0].path).toContain('テスト機能')  // slugified title (日本語対応)
     })
   })
   
@@ -170,7 +170,8 @@ tags: []
       
       expect(result.success).toBe(1)
       expect(result.results[0].success).toBe(true)
-      expect(result.results[0].result?.summary).toBe('更新後のサマリ')
+      expect(result.results[0].type).toBe('update')
+      expect(result.results[0].path).toBe('project/update-test')
     })
     
     it('should append content using regexp_replace', async () => {
@@ -256,17 +257,18 @@ summary: 機能1の説明
       expect(typeof result.tree).toBe('string')
       
       const treeText = result.tree as string
-      // ルートパスとノード数が表示される（仮想ディレクトリ features も含む）
+      // ルートパスとノード数が表示される（仮想ディレクトリは除外）
       expect(treeText).toContain('[project]')
-      expect(treeText).toContain('(3 nodes)')  // project, features (仮想), feature1
+      expect(treeText).toContain('(2 nodes)')  // project, feature1（仮想ディレクトリ features は除外）
       // index.md は親ディレクトリ名として表示される
       // project/index → project に正規化
       expect(treeText).toContain('project:')
-      // features は仮想ディレクトリとして生成される
-      expect(treeText).toContain('features:')
+      // features は仮想ディレクトリなので除外される
+      expect(treeText).not.toContain('features:')
       expect(treeText).toContain('feature1:')
-      expect(treeText).toContain('プロジェクトのトップページ')  // summary
-      expect(treeText).toContain('機能1の説明')  // summary
+      // デフォルトフォーマットは "$path: $title" なので title が表示される
+      expect(treeText).toContain('プロジェクト概要')  // title
+      expect(treeText).toContain('機能1')  // title
     })
     
     it('should get context tree in flat style', async () => {

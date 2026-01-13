@@ -105,9 +105,10 @@ function registerReadTools(
   // -------------------------------------------------------------------------
   server.tool(
     'ocd_list_context_roots',
-    isLocalDev
-      ? '[OCD] Context Root一覧を取得（cwd から設定を探索）'
-      : '[OCD] Context Root一覧を取得',
+    `[OCD] Context Root一覧を取得${isLocalDev ? '（cwd から設定を探索）' : ''}
+
+返却される rootPath を他のツール (get_context_tree, get_contexts, mutate_context) のパス指定に使用してください。
+path はファイルシステム上の絶対パスであり、ツールのパラメータには使用しません。`,
     cwdSchema,
     async (args) => {
       try {
@@ -137,7 +138,7 @@ function registerReadTools(
   // -------------------------------------------------------------------------
   const getContextsSchema = {
     ...cwdSchema,
-    patterns: z.array(z.string()).describe('取得するコンテキストのglob パターン配列 (例: ["project/**", "docs/*"])'),
+    patterns: z.array(z.string()).describe('Context Root の rootPath で始まる glob パターン配列 (例: ["knowledge-base/**", "src/plugins/*"])'),
     filter: z.string().optional().describe('jq フィルタ式 (例: \'.categories | any(. == "feature-spec")\')'),
     includeContent: z.boolean().optional().describe('コンテンツを含めるか (default: true)')
   }
@@ -192,14 +193,13 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
   // -------------------------------------------------------------------------
   const getContextTreeSchema = {
     ...cwdSchema,
-    rootPath: z.string().optional().describe('ルートパス（単一）'),
-    rootPaths: z.array(z.string()).optional().describe('ルートパス配列（複数一括取得）'),
+    rootPath: z.string().optional().describe('Context Root の rootPath（list_context_roots で取得）'),
+    rootPaths: z.array(z.string()).optional().describe('Context Root の rootPath 配列（複数一括取得）'),
     depth: z.number().optional().describe('深さ制限 (省略時は全階層)'),
     format: z.enum(['tree-text', 'json']).optional().describe("出力形式 (default: 'tree-text')"),
-    treeStyle: z.enum(['nested', 'flat']).optional().describe("ツリースタイル (default: 'flat')"),
-    includeSummary: z.boolean().optional().describe('summary を含めるか (default: true)'),
-    includeCategories: z.boolean().optional().describe('categories を含めるか (default: true)'),
-    includeTags: z.boolean().optional().describe('tags を含めるか (default: true)'),
+    // treeStyle: 現在は常に 'flat' を使用（nested は未対応のため一時的に無効化）
+    // treeStyle: z.enum(['nested', 'flat']).optional().describe("ツリースタイル (default: 'flat')"),
+    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title"). 変数: $path, $title, $summary, $categories, $tags'),
     maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)')
   }
   
@@ -211,9 +211,10 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
 - tree-text (default): Token効率の良いテキストツリー形式
 - json: 従来のJSON配列形式
 
-## ツリースタイル (tree-text のみ)
-- flat (default): フルパス表記（階層なし）
-- nested: ネスト形式（ツリー記号で階層表示）
+## 表示フォーマット (treeTextFormat)
+デフォルト: "$path: $title"
+使用可能な変数: $path, $title, $summary, $categories, $tags
+例: "$path: $summary [$categories]"
 ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}`,
     getContextTreeSchema,
     async (args) => {
@@ -225,9 +226,7 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           depth?: number
           format?: 'tree-text' | 'json'
           treeStyle?: 'nested' | 'flat'
-          includeSummary?: boolean
-          includeCategories?: boolean
-          includeTags?: boolean
+          treeTextFormat?: string
           maxNodes?: number
         }
         const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
@@ -237,9 +236,7 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           depth: typedArgs.depth,
           format: typedArgs.format,
           treeStyle: typedArgs.treeStyle,
-          includeSummary: typedArgs.includeSummary,
-          includeCategories: typedArgs.includeCategories,
-          includeTags: typedArgs.includeTags,
+          treeTextFormat: typedArgs.treeTextFormat,
           maxNodes: typedArgs.maxNodes
         })
         
@@ -347,6 +344,9 @@ function registerWriteTools(
 全ての書き込み操作を単一のツールで実行可能。
 複数の操作を配列で渡すことで一括処理できます。
 ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}
+
+**重要**: path は Context Root の rootPath（list_context_roots で取得）で始めてください。
+例: "knowledge-base/new-doc", "src/plugins/MyPlugin/README"
 
 ## 操作タイプ
 

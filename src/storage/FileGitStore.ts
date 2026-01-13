@@ -502,10 +502,9 @@ export class FileGitStore implements IKnowledgeStore {
   
   async commit(message: string, paths?: string[]): Promise<string> {
     if (!this.git) {
-      throw new KnowledgeStoreError(
-        'Git is not enabled',
-        'COMMIT_FAILED'
-      )
+      // Git が有効でない場合はスキップ（エラーにしない）
+      console.error(`[FileGitStore] Git not enabled, skipping commit: ${message}`)
+      return ''
     }
     
     // ステージング

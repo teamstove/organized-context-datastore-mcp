@@ -194,7 +194,8 @@ tags:
       expect(result.success).toBe(1)
       expect(result.errors).toBe(0)
       expect(result.results[0].success).toBe(true)
-      expect(result.results[0].result?.path).toContain('new-feature')
+      expect(result.results[0].type).toBe('create')
+      expect(result.results[0].path).toContain('new-feature')
     })
     
     it('should handle mutateContext with update operation', async () => {
@@ -206,7 +207,8 @@ tags:
       
       expect(result.success).toBe(1)
       expect(result.results[0].success).toBe(true)
-      expect(result.results[0].result?.summary).toBe('更新された機能1の仕様')
+      expect(result.results[0].type).toBe('update')
+      expect(result.results[0].path).toBe('project/features/feature1')
     })
     
     it('should handle mutateContext with contentUpdates (append)', async () => {
@@ -223,7 +225,8 @@ tags:
       
       expect(result.success).toBe(1)
       expect(result.results[0].success).toBe(true)
-      expect(result.results[0].result?.content).toContain('追記セクション')
+      expect(result.results[0].type).toBe('update')
+      expect(result.results[0].path).toBe('project/index')
     })
     
     it('should handle multiple operations in batch', async () => {
