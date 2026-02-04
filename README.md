@@ -50,6 +50,56 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 }
 ```
 
+### stdio モード（ローカル開発: tsx でソース直接実行）
+
+`npx github:...` で Permission denied や ENOTEMPTY が出る場合、またはリポジトリをクローンして開発している場合は、**tsx で TypeScript ソースを直接実行**する設定が確実です。ビルド不要で、npx のキャッシュや .bin の実行権に依存しません。
+
+**手順**
+
+1. **リポジトリをクローン**（未クローンの場合）
+   ```bash
+   git clone https://github.com/teamstove/organized-context-datastore-mcp.git
+   cd organized-context-datastore-mcp
+   ```
+
+2. **依存関係をインストール**
+   ```bash
+   pnpm install
+   # または
+   npm install
+   ```
+
+3. **Cursor の MCP 設定に以下を追加**  
+   `cli.ts` へのパスは、自分の環境のリポジトリ配置に合わせて書き換えてください。
+
+   ```json
+   {
+     "mcpServers": {
+       "organized-context-datastore": {
+         "command": "npx",
+         "args": [
+           "tsx",
+           "/path/to/organized-context-datastore-mcp/src/cli.ts"
+         ]
+       }
+     }
+   }
+   ```
+
+   **例（リポジトリが STOVE_AI_CORE_ENGINE 配下にある場合）**
+   ```json
+   "organized-context-datastore": {
+     "command": "npx",
+     "args": [
+       "tsx",
+       "/Applications/MAMP/htdocs/TAIRIKUT/TAIRIKUT_CORE/CORE/COREFW_AI_WORKFLOWS/STOVE_AI_CORE_ENGINE/packages/apps/organized-context-datastore-mcp/src/cli.ts"
+     ]
+   }
+   ```
+
+   - オプション（`--readonly` など）を付けたい場合は、`args` の末尾に追加します。  
+     例: `"args": ["tsx", "/path/to/.../src/cli.ts", "--readonly"]`
+
 ### HTTP モード
 
 ```json
