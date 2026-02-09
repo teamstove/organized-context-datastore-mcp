@@ -30,11 +30,32 @@ import { WriteTools, type WriteToolsConfig, type WriteResult } from './tools/Wri
  * 
  * MCPツールとして公開する全機能を統合
  */
+/**
+ * 書き込み操作を直列化するためのミューテックス（Promise キュー）
+ * 同一サービスインスタンス内で mutateContext / commit が同時実行されないようにする。
+ * （連続・並行呼び出し時の Git 競合・フリーズを防止）
+ */
+function createWriteMutex(): { run: <T>(fn: () => Promise<T>) => Promise<T> } {
+  let tail: Promise<void> = Promise.resolve()
+  return {
+    run: <T>(fn: () => Promise<T>): Promise<T> => {
+      const prev = tail
+      let resolve: () => void
+      tail = new Promise<void>(r => { resolve = r })
+      return prev
+        .then(() => fn())
+        .finally(() => { resolve!() }) as Promise<T>
+    }
+  }
+}
+
 export class KnowledgeGraphService {
   private readonly config: KnowledgeGraphMCPConfig
   private readonly store: IKnowledgeStore
   private readonly readTools: ReadTools
   private readonly writeTools: WriteTools
+  /** 書き込み系処理の直列化（同一インスタンス内で同時実行を防ぐ） */
+  private readonly writeMutex = createWriteMutex()
   private initialized = false
   
   constructor(config: KnowledgeGraphMCPConfig) {
@@ -200,7 +221,7 @@ export class KnowledgeGraphService {
    */
   async mutateContext(operations: ContextMutation[]): Promise<MutationResult> {
     this.ensureInitialized()
-    return this.writeTools.mutateContext(operations)
+    return this.writeMutex.run(() => this.writeTools.mutateContext(operations))
   }
   
   /**
@@ -210,7 +231,7 @@ export class KnowledgeGraphService {
    */
   async commit(message: string, paths?: string[]): Promise<string> {
     this.ensureInitialized()
-    return this.writeTools.commit(message, paths)
+    return this.writeMutex.run(() => this.writeTools.commit(message, paths))
   }
   
   // ==========================================================================

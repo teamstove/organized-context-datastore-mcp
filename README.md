@@ -204,6 +204,11 @@ export default {
 | `ocd_mutate_context` | コンテキストを変更（create/update/delete/move） |
 | `ocd_commit` | 変更をコミット（git: 'manual' モード用） |
 
+### ocd_mutate_context のパフォーマンス・注意
+
+- **直列化**: 同一の Context Root（同一 cwd）に対して、`ocd_mutate_context` と `ocd_commit` は **同時に 1 件ずつ** 実行されます。連続で呼ぶと 2 件目以降は前の完了を待つため、フリーズではなく「待ち」になります。これにより Git 操作の競合を防いでいます。
+- **move の重さ**: `move` 操作では、同じ Context Root 内の被リンク（リンク切れ防止）を更新するため、ルート配下の全 `.md` をスキャンすることがあります。ファイル数が多いと 1 回の move でも時間がかかることがあります。
+
 ---
 
 ## ディレクトリ構造例
