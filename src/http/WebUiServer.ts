@@ -11,9 +11,27 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 import fs from 'fs'
 import { createRestRoutes } from './routes/restRoutes.js'
+import { isOcdListening } from './whoisCheck.js'
 import type { ServerMode } from '../types/index.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+/**
+ * WebUI ポート競合エラー
+ * 
+ * stdio モードでは致命的ではなく、Web UI を起動しないだけで MCP は続行可能。
+ * kind で「OCD が既に起動中」と「別プロセスが使用中」を区別する。
+ */
+export class WebUiPortConflictError extends Error {
+  constructor(
+    message: string,
+    /** 'ocd-conflict': 同ポートで OCD が起動中 / 'other-conflict': 別プロセスが使用中 */
+    public readonly kind: 'ocd-conflict' | 'other-conflict'
+  ) {
+    super(message)
+    this.name = 'WebUiPortConflictError'
+  }
+}
 
 export interface WebUiServerOptions {
   port: number
@@ -74,6 +92,10 @@ export class WebUiServer {
         mode: 'web-ui',
       })
     })
+    // サーバー種別判定用（重複起動時の EADDRINUSE 対策で既存プロセスが OCD かどうか確認する）
+    this.app.get('/whois', (_req: Request, res: Response) => {
+      res.type('text/plain').send('OCD')
+    })
 
     // REST API
     const restRoutes = createRestRoutes(this.serverMode)
@@ -110,13 +132,46 @@ export class WebUiServer {
     })
   }
 
+  /**
+   * Web UI サーバーを起動
+   * 
+   * ポート競合時は process.exit() せず reject を返す。
+   * 呼び出し元（stdio モードの cli.ts）が graceful に処理できるようにする。
+   */
   async start(): Promise<void> {
     const hostname = '0.0.0.0'
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       this.server = this.app.listen(this.port, hostname, () => {
         console.error(`[WebUI] Server: http://localhost:${this.port}/viewer`)
         console.error(`[WebUI] API: http://localhost:${this.port}/api/ocd`)
         resolve()
+      })
+      this.server.once('error', (err: NodeJS.ErrnoException) => {
+        // サーバーインスタンスをクリア
+        this.server = null
+
+        if (err.code === 'EADDRINUSE') {
+          isOcdListening(this.port).then((isOcd) => {
+            if (isOcd) {
+              reject(new WebUiPortConflictError(
+                `すでに同じポート (${this.port}) で OCD が起動しています。`,
+                'ocd-conflict'
+              ))
+            } else {
+              reject(new WebUiPortConflictError(
+                `ポート ${this.port} は別プロセスで使用中です。`,
+                'other-conflict'
+              ))
+            }
+          }).catch(() => {
+            reject(new WebUiPortConflictError(
+              `ポート ${this.port} の状態を確認できませんでした。`,
+              'other-conflict'
+            ))
+          })
+        } else {
+          reject(new Error(`Web UI サーバー起動エラー: ${err.message}`))
+        }
       })
     })
   }

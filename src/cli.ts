@@ -217,29 +217,55 @@ interface StdioWebUiOptions {
 /**
  * stdio サーバー起動（local-dev モード）
  * --disable-web-ui でなければ Web UI 用 HTTP サーバーも並行起動
+ * 
+ * Web UI のポートが競合している場合は、Web UI を起動せずに
+ * stdio MCP サーバーのみで動作を継続する。
  */
 async function startStdioServer(serverMode: ServerMode, webUiOptions: StdioWebUiOptions): Promise<void> {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
   const { createLocalDevMcpServer } = await import('./mcp-server.js')
   
   let webUiServer: InstanceType<typeof import('./http/WebUiServer.js').WebUiServer> | null = null
+  let webUiStarted = false
   
+  // --- Web UI サーバーの起動（ポート競合時は stdio のみで続行） ---
   if (!webUiOptions.disableWebUi) {
-    const { WebUiServer } = await import('./http/WebUiServer.js')
+    const { WebUiServer, WebUiPortConflictError } = await import('./http/WebUiServer.js')
     webUiServer = new WebUiServer({
       port: webUiOptions.webUiPort,
       serverMode,
     })
-    await webUiServer.start()
+    try {
+      await webUiServer.start()
+      webUiStarted = true
+    } catch (err) {
+      // ポート競合: 致命的ではない → Web UI なしで stdio を続行
+      if (err instanceof WebUiPortConflictError) {
+        if (err.kind === 'ocd-conflict') {
+          console.error(`[OCD-MCP] Web UI: ポート ${webUiOptions.webUiPort} は既に別の OCD が使用中です。Web UI をスキップして stdio のみで起動します。`)
+          console.error(`[OCD-MCP] 既存の Web UI を利用してください: http://localhost:${webUiOptions.webUiPort}/viewer`)
+        } else {
+          console.error(`[OCD-MCP] Web UI: ポート ${webUiOptions.webUiPort} は別プロセスが使用中です。Web UI をスキップして stdio のみで起動します。`)
+        }
+        // サーバーインスタンスをクリア
+        webUiServer = null
+      } else {
+        // その他のエラーも致命的にせず、警告のみ
+        console.error(`[OCD-MCP] Web UI の起動に失敗しました: ${err instanceof Error ? err.message : err}`)
+        console.error(`[OCD-MCP] stdio のみで起動を続行します。`)
+        webUiServer = null
+      }
+    }
   }
   
+  // --- stdio MCP サーバーの起動（こちらは常に起動する） ---
   const server = await createLocalDevMcpServer(serverMode)
   const transport = new StdioServerTransport()
   await server.connect(transport)
   
   // stderr にログ出力（stdout は MCP 通信に使用）
   console.error(`[OCD-MCP] stdio server started (local-dev mode, readonly: ${serverMode.readonly})`)
-  if (!webUiOptions.disableWebUi) {
+  if (webUiStarted) {
     console.error(`[OCD-MCP] Web UI: http://localhost:${webUiOptions.webUiPort}/viewer`)
   }
   
