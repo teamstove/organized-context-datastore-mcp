@@ -155,13 +155,11 @@ export class KnowledgeGraphService {
    * コンテキストツリー (目次) を取得
    * 
    * @param options オプション
-   * - rootPath: 単一のルートパス
-   * - rootPaths: 複数のルートパス（一括取得）
+   * - rootIds: Context Root の ID 配列（list_context_roots で取得した id を使用）
    * - format: 'json' | 'tree-text' (default: 'tree-text')
-   * - includeSummary, includeCategories, includeTags
    * - maxNodes: 返却上限
    * 
-   * @returns rootPaths指定時は ContextTreeResults、それ以外は ContextTreeResult
+   * @returns 単一 rootId の場合は ContextTreeResult、複数の場合は ContextTreeResults
    */
   async getContextTree(options: GetContextTreeOptions): Promise<ContextTreeResult | ContextTreeResults> {
     this.ensureInitialized()

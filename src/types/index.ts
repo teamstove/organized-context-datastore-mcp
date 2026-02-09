@@ -44,9 +44,6 @@ export interface ContextNode {
   /** TODO項目 */
   todos: Todo[]
   
-  /** セクション構造 */
-  sections: Section[]
-  
   /** 子コンテキスト (depth指定時) */
   children?: ContextNode[]
 }
@@ -57,7 +54,20 @@ export interface ContextNode {
  */
 export interface ContextNodeSummary {
   path: string
+  
+  /** 
+   * サマリの見出し部分（10-50文字）
+   * summary と連結して「ひとつづきのサマリ」として機能する
+   */
   title: string
+  
+  /**
+   * サマリの詳細部分（50-300文字）
+   * LLM向けに圧縮された内容説明
+   * title と連結して「ひとつづきのサマリ」として機能する
+   */
+  summary?: string
+  
   /** カスタム属性 */
   attrs: Record<string, unknown>
   updatedAt?: string  // 仮想ノードには存在しない場合がある
@@ -149,19 +159,21 @@ export interface GetContextsOptions {
 }
 
 /**
- * get_context_tree オプション（配列対応）
+ * get_context_tree オプション
  * 
- * - rootPath: 単一のルートパス
- * - rootPaths: 複数のルートパス（一括取得）
- * 
- * どちらか一方を指定。両方指定した場合は rootPaths が優先。
+ * 注意: list_context_roots で取得した id をそのまま使用してください。
+ * 例: ["tairikut-docs"], ["tairikut-docs", "CORE-docs-for-ai"]
  */
 export interface GetContextTreeOptions {
-  /** ルートパス（単一） */
-  rootPath?: string
-  
-  /** ルートパス配列（複数一括取得） */
-  rootPaths?: string[]
+  /** 
+   * Context Root の ID 配列
+   * list_context_roots で取得した id をそのまま指定
+   * 
+   * 例:
+   * - 単一: ["tairikut-docs"]
+   * - 複数: ["tairikut-docs", "CORE-docs-for-ai"]
+   */
+  rootIds: string[]
   
   /** 深さ制限 (default: undefined = 全階層) */
   depth?: number
@@ -182,8 +194,8 @@ export interface GetContextTreeOptions {
    * - $path: 相対パス
    * - $title: タイトル
    * 
-   * @example "$path: $title"
-   * @default "$path: $title"
+   * @example "$path: $title $summary"
+   * @default "$path: $title $summary"
    */
   treeTextFormat?: string
   
@@ -211,17 +223,15 @@ export interface ContextTreeResult {
   /** 結果が切り詰められたか */
   truncated: boolean
   
-  /** ルートパス */
-  rootPath: string
+  /** Context Root の ID */
+  rootId: string
 }
 
 /**
- * get_context_tree の結果（複数）
- * 
- * rootPaths を指定した場合の戻り値
+ * get_context_tree の結果（複数 rootIds 指定時）
  */
 export interface ContextTreeResults {
-  /** 各ルートパスの結果 */
+  /** 各 Context Root の結果 */
   results: ContextTreeResult[]
   
   /** 合計ノード数 */
@@ -235,14 +245,40 @@ export interface ContextTreeResults {
  * create_context パラメータ
  */
 export interface CreateContextParams {
-  /** 親ノードのパス */
-  parentPath: string
+  /** 
+   * コンテキストのパス（完全なパス）
+   * 
+   * 例: "docs/features/new-feature"
+   * 
+   * 注: 拡張子 (.md) は自動付与されるため省略
+   */
+  path: string
   
-  /** タイトル */
+  /** 
+   * Markdown コンテンツ
+   * 
+   * フロントマターは自動生成されるため、本文のみを指定
+   */
+  content: string
+  
+  /** 
+   * サマリの見出し部分（10-50文字）
+   * 
+   * - path から想像できる以上の情報を含める
+   * - summary と連結して読んだときに自然なフレーズになる
+   * - summary との内容重複は禁止
+   */
   title: string
   
-  /** 本文コンテンツ (オプション) */
-  content?: string
+  /**
+   * サマリの詳細部分（50-300文字）
+   * 
+   * - LLM向けに圧縮された内容説明
+   * - 具体的キーワードの羅列でもOK
+   * - title と連結して「ひとつづきのサマリ」として機能する
+   * - title との内容重複は禁止
+   */
+  summary: string
   
   /** カスタム属性 (オプション) */
   attrs?: Record<string, unknown>
@@ -316,8 +352,11 @@ export interface UpdateContextOperation {
   /** 対象パス */
   path: string
   
-  /** タイトル (変更する場合) */
+  /** サマリの見出し部分（変更する場合） */
   title?: string
+  
+  /** サマリの詳細部分（変更する場合） */
+  summary?: string
   
   /** カスタム属性 (変更する場合、マージされる) */
   attrs?: Record<string, unknown>
@@ -385,10 +424,13 @@ export interface ContextMutation {
   type: 'create' | 'update' | 'delete' | 'move'
   
   /**
-   * 対象パス
-   * - create: 親パス (title からスラッグ生成して子パス作成)
+   * 対象パス（全操作で一貫した意味）
+   * 
+   * - create: 作成するコンテキストのパス (例: "docs/features/new-feature")
    * - update/delete: 対象パス
    * - move: 移動元パス
+   * 
+   * 注: 拡張子 (.md) は自動付与されるため省略
    */
   path: string
   
@@ -402,11 +444,29 @@ export interface ContextMutation {
   // ==========================================================================
   
   /**
-   * タイトル
-   * - create: 必須 (スラッグ化してパス生成 + 表示名)
+   * サマリの見出し部分（10-50文字）
+   * 
+   * - create: 必須
    * - update: 変更する場合のみ
+   * 
+   * path から想像できる以上の情報を含め、
+   * summary と連結して読んだときに自然なフレーズになるようにする。
+   * summary との内容重複は禁止。
    */
   title?: string
+  
+  /**
+   * サマリの詳細部分（50-300文字）
+   * 
+   * - create: 必須
+   * - update: 変更する場合のみ
+   * 
+   * LLM向けに圧縮された内容説明。
+   * 具体的キーワードの羅列でもOK。
+   * title と連結して「ひとつづきのサマリ」として機能する。
+   * title との内容重複は禁止。
+   */
+  summary?: string
   
   /**
    * カスタム属性 (create/update で使用)
@@ -420,9 +480,10 @@ export interface ContextMutation {
   // ==========================================================================
   
   /**
-   * 初期コンテンツ (create 時のみ)
+   * コンテンツ (create 時必須)
    * 
-   * update 時は contentUpdates を使用
+   * - create: Markdown 本文 (フロントマターは自動生成)
+   * - update: contentUpdates を使用
    */
   content?: string
   
@@ -479,6 +540,9 @@ export interface MutationOperationResult {
   
   /** 結果ノード (create/update/move 成功時) */
   result?: ContextNode
+  
+  /** 更新された被リンク数 (move 操作時のみ、0件の場合は省略) */
+  backlinksUpdated?: number
 }
 
 // =============================================================================
@@ -608,7 +672,7 @@ export interface KnowledgeGraphMCPConfig {
   /** Context Roots 設定 */
   contextRoots: ContextRootConfig[]
   
-  /** tree-text 形式の表示フォーマット (default: "$path: $title") */
+  /** tree-text 形式の表示フォーマット (default: "$path: $title $summary") */
   treeTextFormat?: string
 }
 
@@ -722,7 +786,7 @@ export interface ContextRootConfig {
  * - local-dev: 開発者のPC上で起動、cwd パラメータで動的に設定を探索
  * - remote-server: サーバー上で常駐、設定ファイルで固定された Context Root を提供
  */
-export type ServerModeType = 'local-dev' | 'remote-server'
+export type ServerModeType = 'local-dev' | 'remote-server' | 'dynamic-storage'
 
 /**
  * サーバーモード設定
@@ -792,8 +856,8 @@ export interface LocalConfig {
    * - $path: 相対パス
    * - $title: タイトル
    * 
-   * @example "$path: $title"
-   * @default "$path: $title"
+   * @example "$path: $title $summary"
+   * @default "$path: $title $summary"
    */
   treeTextFormat?: string
 }

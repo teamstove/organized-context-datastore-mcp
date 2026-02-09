@@ -49,12 +49,14 @@ describe('KnowledgeGraphService', () => {
   })
   
   describe('mutateContext (create)', () => {
-    it('should create a new context', async () => {
-      // mutateContext で作成
+    it('should create a new context with title and summary', async () => {
+      // mutateContext で作成（path, title, summary, content は必須）
       const result = await service.mutateContext([{
         type: 'create',
-        path: 'project',
-        title: 'テスト機能',
+        path: 'project/test-feature',
+        content: '# テスト機能\n\nこれはテスト用のコンテンツです。',
+        title: 'テスト機能実装',
+        summary: 'ユーザー認証とプロファイル管理機能。OAuth2.0対応、JWT発行、セッション管理を含む',
         attrs: { status: 'draft' }
       }])
       
@@ -63,7 +65,15 @@ describe('KnowledgeGraphService', () => {
       expect(result.errors).toBe(0)
       expect(result.results[0].success).toBe(true)
       expect(result.results[0].type).toBe('create')
-      expect(result.results[0].path).toContain('テスト機能')  // slugified title (日本語対応)
+      expect(result.results[0].path).toBe('project/test-feature')
+      
+      // 作成されたファイルの frontmatter に summary が含まれることを確認
+      const contexts = await service.getContexts({
+        patterns: ['project/**/*.md']
+      })
+      const created = contexts.find(c => c.path === 'project/test-feature')
+      expect(created).toBeDefined()
+      expect(created!.attrs.summary).toBe('ユーザー認証とプロファイル管理機能。OAuth2.0対応、JWT発行、セッション管理を含む')
     })
   })
   
@@ -223,7 +233,7 @@ title: 機能1
     
     it('should get context tree in json format', async () => {
       const result = await service.getContextTree({
-        rootPath: 'project',
+        rootIds: ['project'],
         format: 'json'
       })
       
@@ -240,7 +250,7 @@ title: 機能1
     
     it('should get context tree in tree-text format (default)', async () => {
       const result = await service.getContextTree({
-        rootPath: 'project'
+        rootIds: ['project']
       })
       
       expect(result.format).toBe('tree-text')
@@ -263,7 +273,7 @@ title: 機能1
     
     it('should get context tree in flat style', async () => {
       const result = await service.getContextTree({
-        rootPath: 'project'
+        rootIds: ['project']
       })
       
       expect(result.format).toBe('tree-text')
@@ -296,17 +306,18 @@ title: 検索テスト
   
   describe('mutateContext (統合版)', () => {
     it('should create, update, and delete in a single call', async () => {
-      // 1. 作成 + 更新 + 削除を一括実行
+      // 1. 作成を一括実行（path は完全なパス、content は必須）
       const result = await service.mutateContext([
-        // 作成
         {
           type: 'create',
-          path: 'project',
+          path: 'project/mutate-test-1',
+          content: '# Mutate Test 1\n\nテスト内容1',
           title: 'mutate-test-1'
         },
         {
           type: 'create',
-          path: 'project',
+          path: 'project/mutate-test-2',
+          content: '# Mutate Test 2\n\nテスト内容2',
           title: 'mutate-test-2'
         }
       ])
@@ -344,11 +355,12 @@ title: 検索テスト
     })
     
     it('should handle move operation', async () => {
-      // 作成
+      // 作成（path は完全なパス、content は必須）
       await service.mutateContext([
         {
           type: 'create',
-          path: 'project',
+          path: 'project/move-source',
+          content: '# Move Source\n\n移動元のコンテンツ',
           title: 'move-source',
           attrs: { note: '移動元' }
         }
@@ -389,11 +401,12 @@ title: 検索テスト
     })
     
     it('should continue on error (partial success)', async () => {
-      // 1つ成功、1つ失敗
+      // 1つ成功、1つ失敗（create は path と content が必須）
       const result = await service.mutateContext([
         {
           type: 'create',
-          path: 'project',
+          path: 'project/partial-success',
+          content: '# Partial Success\n\nテスト内容',
           title: 'partial-success'
         },
         {
@@ -407,6 +420,168 @@ title: 検索テスト
       expect(result.errors).toBe(1)
       expect(result.results[0].success).toBe(true)
       expect(result.results[1].success).toBe(false)
+    })
+  })
+  
+  // ==========================================================================
+  // Move with Backlink Update Tests
+  // ==========================================================================
+  
+  describe('mutateContext (move with backlink update)', () => {
+    it('should update backlinks when moving a file', async () => {
+      // 1. ターゲットファイルを作成
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/docs/feature',
+          content: '# Feature\n\nFeature description.',
+          title: 'Feature'
+        }
+      ])
+      
+      // 2. ターゲットを参照するファイルを作成
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/docs/overview',
+          content: '# Overview\n\nSee [Feature](./feature.md) for details.\n\nAlso check [[docs/feature]].',
+          title: 'Overview'
+        }
+      ])
+      
+      // 3. ファイルを移動
+      const result = await service.mutateContext([
+        {
+          type: 'move',
+          path: 'project/docs/feature',
+          to: 'project/archive/feature'
+        }
+      ])
+      
+      expect(result.success).toBe(1)
+      expect(result.results[0].success).toBe(true)
+      expect(result.results[0].backlinksUpdated).toBe(1) // overview.md が更新される
+      
+      // 4. 被リンクが更新されているか確認
+      const contexts = await service.getContexts({ 
+        patterns: ['project/docs/overview*'],
+        includeContent: true
+      })
+      
+      expect(contexts).toHaveLength(1)
+      // リンクが更新されていることを確認
+      expect(contexts[0].content).toContain('../archive/feature')
+    })
+    
+    it('should not return backlinksUpdated when no backlinks exist', async () => {
+      // 1. リンクのないファイルを作成
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/isolated-file',
+          content: '# Isolated\n\nNo links to this file.',
+          title: 'Isolated'
+        }
+      ])
+      
+      // 2. 移動
+      const result = await service.mutateContext([
+        {
+          type: 'move',
+          path: 'project/isolated-file',
+          to: 'project/moved-isolated'
+        }
+      ])
+      
+      expect(result.success).toBe(1)
+      expect(result.results[0].success).toBe(true)
+      // 被リンクがない場合は undefined
+      expect(result.results[0].backlinksUpdated).toBeUndefined()
+    })
+    
+    it('should update multiple backlinks in one file', async () => {
+      // 1. ターゲットファイルを作成
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/target',
+          content: '# Target\n\nTarget content.',
+          title: 'Target'
+        }
+      ])
+      
+      // 2. 複数のリンクを持つファイルを作成
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/referencer',
+          content: '# Referencer\n\nFirst link: [Target](./target.md)\n\nSecond link: [Also Target](./target.md)',
+          title: 'Referencer'
+        }
+      ])
+      
+      // 3. 移動
+      const result = await service.mutateContext([
+        {
+          type: 'move',
+          path: 'project/target',
+          to: 'project/new-target'
+        }
+      ])
+      
+      expect(result.success).toBe(1)
+      expect(result.results[0].backlinksUpdated).toBe(1) // ファイル単位でカウント
+      
+      // 4. 確認
+      const contexts = await service.getContexts({ 
+        patterns: ['project/referencer*'],
+        includeContent: true
+      })
+      
+      expect(contexts).toHaveLength(1)
+      // 両方のリンクが更新されていることを確認
+      expect(contexts[0].content).toContain('./new-target.md')
+      expect(contexts[0].content).not.toContain('./target.md')
+    })
+    
+    it('should update backlinks from multiple files', async () => {
+      // 1. ターゲットファイルを作成
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/shared-target',
+          content: '# Shared Target\n\nShared content.',
+          title: 'Shared Target'
+        }
+      ])
+      
+      // 2. 複数のファイルからリンク
+      await service.mutateContext([
+        {
+          type: 'create',
+          path: 'project/file1',
+          content: '# File 1\n\nLink: [Shared](./shared-target.md)',
+          title: 'File 1'
+        },
+        {
+          type: 'create',
+          path: 'project/file2',
+          content: '# File 2\n\nLink: [Shared](./shared-target.md)',
+          title: 'File 2'
+        }
+      ])
+      
+      // 3. 移動
+      const result = await service.mutateContext([
+        {
+          type: 'move',
+          path: 'project/shared-target',
+          to: 'project/new-shared'
+        }
+      ])
+      
+      expect(result.success).toBe(1)
+      expect(result.results[0].backlinksUpdated).toBe(2) // 2ファイルが更新される
     })
   })
 })

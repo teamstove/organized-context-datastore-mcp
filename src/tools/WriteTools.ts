@@ -6,6 +6,7 @@
  * すべての書き込みツールは配列入力に対応し、複数パスへの一括操作が可能
  */
 
+import path from 'path'
 import matter from 'gray-matter'
 import type { IKnowledgeStore } from '../storage/IKnowledgeStore.js'
 import type { 
@@ -23,6 +24,9 @@ import { parseMarkdown, toContextNode } from '../parser/MarkdownParser.js'
 
 /** システムデフォルトの拡張子 */
 const SYSTEM_DEFAULT_EXTENSION = '.md'
+
+/** Markdown リンクパターン: [text](path) または [[path]] */
+const LINK_PATTERN = /(?:\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\])/g
 
 /**
  * 書き込みツール設定
@@ -88,13 +92,15 @@ export class WriteTools {
       try {
         switch (op.type) {
           case 'create': {
-            // バリデーション
-            if (!op.title) throw new WriteError('create requires title', 'INVALID_OPERATION', op.path)
+            // バリデーション: content は必須
+            if (!op.content) throw new WriteError('create requires content', 'INVALID_OPERATION', op.path)
             
+            // title と summary は create 時必須だが、型上はオプションなのでデフォルト値を設定
             const createResult = await this.createContextSingle({
-              parentPath: op.path,
-              title: op.title,
+              path: op.path,
               content: op.content,
+              title: op.title || this.extractTitleFromPath(op.path),
+              summary: op.summary || '',
               attrs: op.attrs,
               extension: op.extension
             })
@@ -114,6 +120,7 @@ export class WriteTools {
             const updateResult = await this.updateContextSingle({
               path: op.path,
               title: op.title,
+              summary: op.summary,
               attrs: op.attrs,
               contentUpdates: op.contentUpdates
             })
@@ -148,12 +155,19 @@ export class WriteTools {
             
             const moveResult = await this.moveContextSingle(op.path, op.to)
             
-            results.push({
+            // 結果を構築（backlinksUpdated は 0 より大きい場合のみ含める）
+            const moveResultEntry: MutationOperationResult = {
               type: 'move',
               path: op.to,
               success: true
-              // result は Token 効率のため省略
-            })
+            }
+            
+            // 被リンクが更新された場合のみ追加
+            if (moveResult.backlinksUpdated && moveResult.backlinksUpdated > 0) {
+              moveResultEntry.backlinksUpdated = moveResult.backlinksUpdated
+            }
+            
+            results.push(moveResultEntry)
             affectedPaths.push(op.path, op.to)
             successCount++
             break
@@ -189,32 +203,66 @@ export class WriteTools {
   
   /**
    * 単一コンテキスト作成 (コミットなし)
+   * 
+   * path は完全なパス（拡張子なし）を受け取る
+   * 例: "docs/features/new-feature"
    */
   private async createContextSingle(params: CreateContextParams): Promise<{ path: string; node: ContextNode }> {
-    const { parentPath, title, content = '', attrs = {}, extension } = params
-    
-    const slug = this.slugify(title)
+    const { path, content, title, summary, attrs = {}, extension } = params
     
     // 拡張子を決定: 明示指定 > Context Root のデフォルト > システムデフォルト
-    const resolvedExtension = this.resolveExtension(parentPath, extension)
+    const resolvedExtension = this.resolveExtension(path, extension)
     
-    // スラッグに拡張子を付与してパスを構成
+    // パスに拡張子情報を付与（.context.md の場合は .context を付与）
     // 注: store.write は内部で .md を付与するので、ここでは拡張子なしのパスを使用
-    // ただし、.context.md のような複合拡張子の場合は .md を除いた部分をスラッグに含める
-    const slugWithExtension = this.buildSlugWithExtension(slug, resolvedExtension)
-    const path = `${parentPath}/${slugWithExtension}`
+    const finalPath = this.applyExtensionToPath(path, resolvedExtension)
     
-    this.checkWritePermission(path)
+    this.checkWritePermission(finalPath)
     
-    if (await this.store.exists(path)) {
-      throw new WriteError(`Context already exists: ${path}`, 'ALREADY_EXISTS', path)
+    if (await this.store.exists(finalPath)) {
+      throw new WriteError(`Context already exists: ${finalPath}`, 'ALREADY_EXISTS', finalPath)
     }
     
-    const markdown = this.generateMarkdown({ title, attrs, content })
-    await this.store.write(path, markdown)
+    // summary を attrs に含めて frontmatter に書き込む
+    const attrsWithSummary = summary ? { ...attrs, summary } : attrs
     
-    const node = await this.loadContextNode(path)
-    return { path, node }
+    const markdown = this.generateMarkdown({ title, attrs: attrsWithSummary, content })
+    await this.store.write(finalPath, markdown)
+    
+    const node = await this.loadContextNode(finalPath)
+    return { path: finalPath, node }
+  }
+  
+  /**
+   * パスからタイトルを推測
+   * 
+   * 例: "docs/features/new-feature" → "new-feature"
+   */
+  private extractTitleFromPath(path: string): string {
+    const parts = path.split('/')
+    return parts[parts.length - 1]
+  }
+  
+  /**
+   * パスに拡張子情報を付与
+   * 
+   * - .md の場合: path のまま（store.write が .md を付与）
+   * - .context.md の場合: path.context（store.write が .md を付与して path.context.md になる）
+   */
+  private applyExtensionToPath(path: string, extension: string): string {
+    if (extension === '.md') {
+      return path
+    }
+    
+    // .context.md → .context 部分を抽出してパスに付与
+    if (extension.endsWith('.md')) {
+      const prefix = extension.slice(0, -3) // ".context.md" → ".context"
+      return `${path}${prefix}`
+    }
+    
+    // .md 以外の拡張子は現在未サポート（将来対応）
+    console.error(`[WriteTools] Unsupported extension: ${extension}, using .md`)
+    return path
   }
   
   /**
@@ -225,7 +273,7 @@ export class WriteTools {
    * 2. Context Root の defaultExtension
    * 3. システムデフォルト (.md)
    */
-  private resolveExtension(parentPath: string, explicitExtension?: string): string {
+  private resolveExtension(path: string, explicitExtension?: string): string {
     // 1. 明示的に指定されていればそれを使用
     if (explicitExtension) {
       return explicitExtension.startsWith('.') ? explicitExtension : `.${explicitExtension}`
@@ -234,8 +282,9 @@ export class WriteTools {
     // 2. Context Root の defaultExtension を探す
     const contextRoots = this.config.contextRoots ?? []
     for (const root of contextRoots) {
-      // parentPath がこの Context Root 配下かどうか
-      if (parentPath === root.path || parentPath.startsWith(root.path + '/')) {
+      // path がこの Context Root 配下かどうか（id または path でマッチ）
+      if (path === root.id || path.startsWith(root.id + '/') ||
+          path === root.path || path.startsWith(root.path + '/')) {
         if (root.defaultExtension) {
           return root.defaultExtension.startsWith('.') 
             ? root.defaultExtension 
@@ -274,7 +323,7 @@ export class WriteTools {
    * 単一コンテキスト更新 (コミットなし)
    */
   private async updateContextSingle(op: UpdateContextOperation): Promise<ContextNode> {
-    const { path, title, attrs, contentUpdates } = op
+    const { path, title, summary, attrs, contentUpdates } = op
     
     this.checkWritePermission(path)
     
@@ -284,6 +333,7 @@ export class WriteTools {
     const newFrontmatter = {
       ...frontmatter,
       ...(title !== undefined && { title }),
+      ...(summary !== undefined && { summary }),
       ...(attrs !== undefined && attrs) // attrs はマージ
     }
     
@@ -310,22 +360,52 @@ export class WriteTools {
   
   /**
    * 単一コンテキスト移動 (コミットなし)
+   * 
+   * 移動後、同じ Context Root 内の被リンクを自動的に更新する
+   * 
+   * @param fromPath 移動元パス
+   * @param toPath 移動先パス
+   * @returns 移動後のノードと更新された被リンク数
    */
-  private async moveContextSingle(fromPath: string, toPath: string): Promise<ContextNode | undefined> {
+  private async moveContextSingle(
+    fromPath: string, 
+    toPath: string
+  ): Promise<{ node?: ContextNode; backlinksUpdated?: number }> {
     this.checkWritePermission(fromPath)
     this.checkWritePermission(toPath)
     
+    // 1. 被リンクを先に更新（移動前に実行）
+    //    移動後だとリンク先が変わってしまい、マッチしなくなる
+    const contextRootId = this.extractContextRootId(fromPath)
+    let backlinksUpdated = 0
+    
+    if (contextRootId) {
+      try {
+        backlinksUpdated = await this.updateBacklinks(contextRootId, fromPath, toPath)
+      } catch (error) {
+        // 被リンク更新に失敗しても移動は続行
+        console.error(`[WriteTools] Failed to update backlinks:`, error)
+      }
+    }
+    
+    // 2. ファイル/ディレクトリを移動
     await this.store.move(fromPath, toPath)
     
-    // 移動後のノードを返す
+    // 3. 移動後のノードを返す
+    let node: ContextNode | undefined
     try {
-      return await this.loadContextNode(toPath)
+      node = await this.loadContextNode(toPath)
     } catch {
       try {
-        return await this.loadContextNode(`${toPath}/index`)
+        node = await this.loadContextNode(`${toPath}/index`)
       } catch {
-        return undefined
+        node = undefined
       }
+    }
+    
+    return {
+      node,
+      backlinksUpdated: backlinksUpdated > 0 ? backlinksUpdated : undefined
     }
   }
   
@@ -506,16 +586,239 @@ export class WriteTools {
   /**
    * コンテキストノードをロード
    */
-  private async loadContextNode(path: string): Promise<ContextNode> {
-    const content = await this.store.read(path)
-    const metadata = await this.store.getMetadata(path)
+  private async loadContextNode(nodePath: string): Promise<ContextNode> {
+    const content = await this.store.read(nodePath)
+    const metadata = await this.store.getMetadata(nodePath)
     
-    const parsed = parseMarkdown(content, path)
+    const parsed = parseMarkdown(content, nodePath)
     
-    return toContextNode(path, parsed, {
+    return toContextNode(nodePath, parsed, {
       createdAt: metadata.createdAt,
       updatedAt: metadata.updatedAt
     })
+  }
+  
+  // ==========================================================================
+  // Backlink Update Helpers (move 操作時の被リンク更新)
+  // ==========================================================================
+  
+  /**
+   * 同じ Context Root 内の被リンクを更新
+   * 
+   * 移動元パスを参照しているリンクを、移動先パスに更新する
+   * 
+   * @param contextRootId Context Root の ID
+   * @param fromPath 移動元パス (Context Root ID を含む)
+   * @param toPath 移動先パス (Context Root ID を含む)
+   * @returns 更新されたファイル数
+   */
+  private async updateBacklinks(
+    contextRootId: string,
+    fromPath: string,
+    toPath: string
+  ): Promise<number> {
+    // 同じ Context Root 内の全 .md ファイルを取得
+    const pattern = `${contextRootId}/**/*.md`
+    const files = await this.store.list(pattern)
+    
+    let updatedCount = 0
+    
+    // Context Root ID を除いた相対パスを計算
+    const fromRelative = fromPath.startsWith(contextRootId + '/') 
+      ? fromPath.slice(contextRootId.length + 1) 
+      : fromPath
+    const toRelative = toPath.startsWith(contextRootId + '/') 
+      ? toPath.slice(contextRootId.length + 1) 
+      : toPath
+    
+    for (const file of files) {
+      // 移動するファイル自体はスキップ
+      if (file === fromPath || file === `${fromPath}.md` || 
+          file.startsWith(fromPath + '/')) {
+        continue
+      }
+      
+      try {
+        const content = await this.store.read(file)
+        
+        // ファイルの相対パス (Context Root ID を除く)
+        const fileRelative = file.startsWith(contextRootId + '/') 
+          ? file.slice(contextRootId.length + 1) 
+          : file
+        
+        const { content: updatedContent, updated } = this.updateLinksInContent(
+          content,
+          fileRelative,
+          fromRelative,
+          toRelative
+        )
+        
+        if (updated) {
+          await this.store.write(file, updatedContent)
+          updatedCount++
+        }
+      } catch (error) {
+        // 読み取りエラーは警告のみでスキップ
+        console.error(`[WriteTools] Failed to update backlinks in ${file}:`, error)
+      }
+    }
+    
+    return updatedCount
+  }
+  
+  /**
+   * コンテンツ内のリンクを更新
+   * 
+   * @param content Markdown コンテンツ
+   * @param sourceFilePath ソースファイルのパス（相対パス計算用）
+   * @param fromPath 移動元パス
+   * @param toPath 移動先パス
+   * @returns 更新後のコンテンツと更新フラグ
+   */
+  private updateLinksInContent(
+    content: string,
+    sourceFilePath: string,
+    fromPath: string,
+    toPath: string
+  ): { content: string; updated: boolean } {
+    let updated = false
+    
+    // ソースファイルのディレクトリを取得
+    const sourceDir = path.dirname(sourceFilePath)
+    
+    // fromPath にマッチする可能性のあるパターンを生成
+    // - 相対パス: ./feature.md, ../docs/feature.md
+    // - 拡張子なし: ./feature, ../docs/feature
+    // - 絶対パス形式: /docs/feature.md
+    const fromWithExt = fromPath.endsWith('.md') ? fromPath : `${fromPath}.md`
+    const fromWithoutExt = fromPath.endsWith('.md') ? fromPath.slice(0, -3) : fromPath
+    
+    const toWithExt = toPath.endsWith('.md') ? toPath : `${toPath}.md`
+    const toWithoutExt = toPath.endsWith('.md') ? toPath.slice(0, -3) : toPath
+    
+    // 正規表現でリンクを検出・置換
+    const updatedContent = content.replace(LINK_PATTERN, (match, text, linkPath, wikiPath) => {
+      // [text](path) 形式
+      if (linkPath) {
+        const newLink = this.updateSingleLink(
+          linkPath, sourceDir, fromWithExt, fromWithoutExt, toWithExt, toWithoutExt
+        )
+        if (newLink !== linkPath) {
+          updated = true
+          return `[${text}](${newLink})`
+        }
+      }
+      
+      // [[path]] 形式
+      if (wikiPath) {
+        const newLink = this.updateSingleLink(
+          wikiPath, sourceDir, fromWithExt, fromWithoutExt, toWithExt, toWithoutExt
+        )
+        if (newLink !== wikiPath) {
+          updated = true
+          return `[[${newLink}]]`
+        }
+      }
+      
+      return match
+    })
+    
+    return { content: updatedContent, updated }
+  }
+  
+  /**
+   * 単一のリンクを更新
+   * 
+   * @param linkPath 現在のリンクパス
+   * @param sourceDir ソースファイルのディレクトリ
+   * @param fromWithExt 移動元パス（拡張子あり）
+   * @param fromWithoutExt 移動元パス（拡張子なし）
+   * @param toWithExt 移動先パス（拡張子あり）
+   * @param toWithoutExt 移動先パス（拡張子なし）
+   * @returns 更新後のリンクパス（変更なしの場合は元のパス）
+   */
+  private updateSingleLink(
+    linkPath: string,
+    sourceDir: string,
+    fromWithExt: string,
+    fromWithoutExt: string,
+    toWithExt: string,
+    toWithoutExt: string
+  ): string {
+    // 外部リンクはスキップ
+    if (linkPath.startsWith('http://') || linkPath.startsWith('https://')) {
+      return linkPath
+    }
+    
+    // リンクの絶対パスを計算
+    const absoluteLinkPath = linkPath.startsWith('/')
+      ? linkPath.slice(1) // 先頭の / を除去
+      : path.join(sourceDir, linkPath)
+    
+    // 正規化（.. や . を解決）
+    const normalizedPath = path.normalize(absoluteLinkPath)
+    
+    // 拡張子あり/なしの両方でマッチを確認
+    const hasExtension = linkPath.endsWith('.md')
+    
+    // マッチするかチェック
+    const matchesWithExt = normalizedPath === fromWithExt || normalizedPath === fromWithoutExt + '.md'
+    const matchesWithoutExt = normalizedPath === fromWithoutExt
+    const matchesDir = normalizedPath.startsWith(fromWithoutExt + '/')
+    
+    if (matchesWithExt || matchesWithoutExt || matchesDir) {
+      // 新しいパスを計算
+      let newTargetPath: string
+      
+      if (matchesDir) {
+        // ディレクトリ配下のファイルへのリンク
+        const relativePart = normalizedPath.slice(fromWithoutExt.length)
+        newTargetPath = toWithoutExt + relativePart
+      } else {
+        // ファイルへの直接リンク
+        newTargetPath = hasExtension ? toWithExt : toWithoutExt
+      }
+      
+      // ソースファイルからの相対パスを計算
+      if (linkPath.startsWith('/')) {
+        // 元が絶対パス形式なら絶対パス形式で返す
+        return '/' + newTargetPath
+      } else {
+        // 相対パスを計算
+        let relativePath = path.relative(sourceDir, newTargetPath)
+        
+        // ./ で始まらない場合は追加（可読性のため）
+        if (!relativePath.startsWith('.') && !relativePath.startsWith('/')) {
+          relativePath = './' + relativePath
+        }
+        
+        return relativePath
+      }
+    }
+    
+    return linkPath
+  }
+  
+  /**
+   * パスから Context Root ID を抽出
+   */
+  private extractContextRootId(targetPath: string): string | null {
+    const parts = targetPath.split('/')
+    if (parts.length === 0) return null
+    
+    // 最初の部分が Context Root ID
+    const potentialId = parts[0]
+    
+    // 設定された Context Root と照合
+    const contextRoots = this.config.contextRoots ?? []
+    for (const root of contextRoots) {
+      if (root.id === potentialId) {
+        return potentialId
+      }
+    }
+    
+    // 見つからない場合は最初の部分をそのまま返す
+    return potentialId
   }
 }
 

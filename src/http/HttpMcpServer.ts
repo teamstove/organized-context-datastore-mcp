@@ -14,6 +14,7 @@ import express, { type Express, type Request, type Response, type NextFunction }
 import cors from 'cors'
 import { ProjectRegistry, type HttpServerConfig, type ProjectConfig } from './ProjectRegistry.js'
 import { createMcpRoutes, createLocalDevMcpRoutes } from './routes/mcpRoutes.js'
+import { createRestRoutes } from './routes/restRoutes.js'
 import type { ServerMode } from '../types/index.js'
 
 /**
@@ -107,6 +108,15 @@ export class HttpMcpServer {
     // MCPルート (Streamable HTTP)
     const mcpRoutes = createMcpRoutes(this.registry)
     this.app.use('/api/mcp', mcpRoutes)
+    
+    // REST API ルート (フロントエンド向け)
+    // multi-tenant モードでは動的ストレージを使用
+    const dynamicServerMode: ServerMode = {
+      type: 'dynamic-storage',
+      readonly: false
+    }
+    const restRoutes = createRestRoutes(dynamicServerMode)
+    this.app.use('/api/ocd', restRoutes)
     
     // エラーハンドラー
     this.app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
@@ -311,6 +321,10 @@ class LocalDevHttpServer {
     // MCP ルート (local-dev モード)
     const mcpRoutes = createLocalDevMcpRoutes(this.serverMode)
     this.app.use('/api/mcp', mcpRoutes)
+    
+    // REST API ルート (フロントエンド向け)
+    const restRoutes = createRestRoutes(this.serverMode)
+    this.app.use('/api/ocd', restRoutes)
     
     // エラーハンドラー
     this.app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {

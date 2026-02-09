@@ -34,11 +34,19 @@ export const ContentUpdateSchema = z.discriminatedUnion('type', [
  */
 export const ContextMutationSchema = z.object({
   type: z.enum(['create', 'update', 'delete', 'move']).describe('操作タイプ'),
-  path: z.string().describe('対象パス (create: 親パス, update/delete: 対象パス, move: 移動元)'),
+  path: z.string().describe('対象パス（全操作で同じ意味: 作成/更新/削除/移動元のパス）'),
   to: z.string().optional().describe('移動先パス (move 時のみ)'),
-  title: z.string().optional().describe('タイトル (create時必須)'),
+  title: z.string().optional().describe(`サマリの見出し部分（10-50文字）【create時必須】
+- path から想像できる以上の情報を含める
+- summary と連結して読んだときに自然なフレーズになる
+- summary との内容重複は禁止`),
+  summary: z.string().optional().describe(`サマリの詳細部分（50-300文字）【create時必須】
+- LLM向けに圧縮された内容説明
+- 具体的キーワードの羅列でもOK
+- title と連結して「ひとつづきのサマリ」として機能する
+- title との内容重複は禁止`),
   attrs: z.record(z.unknown()).optional().describe('カスタム属性 (frontmatter に保存)'),
-  content: z.string().optional().describe('初期コンテンツ (create 時のみ)'),
+  content: z.string().optional().describe('コンテンツ (create 時必須)'),
   contentUpdates: z.array(ContentUpdateSchema).optional().describe('コンテンツ更新操作 (update 時のみ)')
 })
 
@@ -101,13 +109,26 @@ function registerReadTools(
   // -------------------------------------------------------------------------
   // ocd_list_context_roots
   // -------------------------------------------------------------------------
-  server.tool(
+  server.registerTool(
     'ocd_list_context_roots',
-    `[OCD] Context Root一覧を取得${isLocalDev ? '（cwd から設定を探索）' : ''}
+    {
+      description: `[OCD] Context Root 一覧を取得${isLocalDev ? '（cwd から設定を探索）' : ''}
 
-返却される rootPath を他のツール (get_context_tree, get_contexts, mutate_context) のパス指定に使用してください。
-path はファイルシステム上の絶対パスであり、ツールのパラメータには使用しません。`,
-    cwdSchema,
+**重要**: 返却される id を以下のツールで使用してください:
+
+- get_context_tree: rootIds に id を配列で指定
+  例: rootIds: ["tairikut-docs"]
+  
+- get_contexts: patterns に "id/**" 形式で指定
+  例: patterns: ["tairikut-docs/**"]
+  
+- mutate_context: path に "id/subpath" 形式で指定
+  例: path: "tairikut-docs/features/new"
+
+⚠️ 注意: path フィールドは実際のファイルシステムパスです。
+ツール引数には使用しないでください。id を使用してください。`,
+      inputSchema: cwdSchema
+    },
     async (args) => {
       try {
         const service = await resolveService(isLocalDev ? (args as { cwd: string }).cwd : undefined)
@@ -141,9 +162,10 @@ path はファイルシステム上の絶対パスであり、ツールのパラ
     includeContent: z.boolean().optional().describe('コンテンツを含めるか (default: true)')
   }
   
-  server.tool(
+  server.registerTool(
     'ocd_get_contexts',
-    `[OCD] Organized Context Datastore - 階層構造を持つコンテキストを LLM と人間が共同で読み書きする MCP サーバー。
+    {
+      description: `[OCD] Organized Context Datastore - 階層構造を持つコンテキストを LLM と人間が共同で読み書きする MCP サーバー。
 
 パターンとフィルタでコンテキストを取得します。
 
@@ -156,7 +178,8 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
 ## jq フィルタ例
 - attrs でフィルタ: '.attrs.status == "draft"'
 - 未完了TODOがあるもの: '.todos | any(.completed == false)'`,
-    getContextsSchema,
+      inputSchema: getContextsSchema
+    },
     async (args) => {
       try {
         const typedArgs = args as { cwd?: string; patterns: string[]; filter?: string; includeContent?: boolean }
@@ -190,35 +213,46 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
   // -------------------------------------------------------------------------
   const getContextTreeSchema = {
     ...cwdSchema,
-    rootPath: z.string().optional().describe('Context Root の rootPath（list_context_roots で取得）'),
-    rootPaths: z.array(z.string()).optional().describe('Context Root の rootPath 配列（複数一括取得）'),
+    rootIds: z.array(z.string()).describe(
+      'Context Root の id 配列（list_context_roots で取得した id をそのまま使用）\n' +
+      '例: ["tairikut-docs"] または ["tairikut-docs", "CORE-docs-for-ai"]'
+    ),
     depth: z.number().optional().describe('深さ制限 (省略時は全階層)'),
     format: z.enum(['tree-text', 'json']).optional().describe("出力形式 (default: 'tree-text')"),
-    // treeStyle: 現在は常に 'flat' を使用（nested は未対応のため一時的に無効化）
-    // treeStyle: z.enum(['nested', 'flat']).optional().describe("ツリースタイル (default: 'flat')"),
-    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title"). 変数: $path, $title'),
+    treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title $summary"). 変数: $path, $title, $summary'),
     maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)')
   }
   
-  server.tool(
+  server.registerTool(
     'ocd_get_context_tree',
-    `[OCD] コンテキストツリー(目次)を取得
+    {
+      description: `[OCD] コンテキストツリー(目次)を取得
+
+## パラメータ
+- rootIds: Context Root の id 配列（list_context_roots で取得した id をそのまま使用）
+
+**重要**: list_context_roots で返却された id を使用してください。
+path フィールド（実際のファイルシステムパス）は使用しないでください。
+
+例:
+- 単一: rootIds: ["tairikut-docs"]
+- 複数: rootIds: ["tairikut-docs", "CORE-docs-for-ai"]
 
 ## フォーマット
 - tree-text (default): Token効率の良いテキストツリー形式
 - json: 従来のJSON配列形式
 
 ## 表示フォーマット (treeTextFormat)
-デフォルト: "$path: $title"
-使用可能な変数: $path, $title
+デフォルト: "$path: $title $summary"
+使用可能な変数: $path, $title, $summary
 ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}`,
-    getContextTreeSchema,
+      inputSchema: getContextTreeSchema
+    },
     async (args) => {
       try {
         const typedArgs = args as {
           cwd?: string
-          rootPath?: string
-          rootPaths?: string[]
+          rootIds: string[]
           depth?: number
           format?: 'tree-text' | 'json'
           treeTextFormat?: string
@@ -226,8 +260,7 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
         }
         const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
         const result = await service.getContextTree({
-          rootPath: typedArgs.rootPath,
-          rootPaths: typedArgs.rootPaths,
+          rootIds: typedArgs.rootIds,
           depth: typedArgs.depth,
           format: typedArgs.format,
           treeTextFormat: typedArgs.treeTextFormat,
@@ -272,10 +305,12 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
     scope: z.array(z.string()).optional().describe('検索スコープ (glob パターン)')
   }
   
-  server.tool(
+  server.registerTool(
     'ocd_search_contexts',
-    `[OCD] キーワードでコンテキストを検索${isLocalDev ? '（cwd から設定を探索）' : ''}`,
-    searchContextsSchema,
+    {
+      description: `[OCD] キーワードでコンテキストを検索${isLocalDev ? '（cwd から設定を探索）' : ''}`,
+      inputSchema: searchContextsSchema
+    },
     async (args) => {
       try {
         const typedArgs = args as { cwd?: string; query: string; scope?: string[] }
@@ -331,25 +366,41 @@ function registerWriteTools(
     operations: z.array(ContextMutationSchema).describe('変更操作の配列')
   }
   
-  server.tool(
+  server.registerTool(
     'ocd_mutate_context',
-    `[OCD] コンテキストを変更 (create/update/delete/move 一括実行)
+    {
+      description: `[OCD] コンテキストを変更 (create/update/delete/move 一括実行)
 
 全ての書き込み操作を単一のツールで実行可能。
 複数の操作を配列で渡すことで一括処理できます。
 ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : ''}
 
-**重要**: path は Context Root の rootPath（list_context_roots で取得）で始めてください。
+**重要**: path は Context Root の id で始まる完全なパスを指定してください。
 例: "knowledge-base/new-doc", "src/plugins/MyPlugin/README"
 
 ## 操作タイプ
 
-| type   | 必須フィールド       | オプション                     |
-|--------|---------------------|------------------------------|
-| create | path (親), title    | attrs, content               |
-| update | path                | title, attrs, contentUpdates |
-| delete | path                | -                            |
-| move   | path (元), to       | -                            |
+| type   | 必須フィールド                  | オプション                     |
+|--------|-------------------------------|------------------------------|
+| create | path, title, summary, content | attrs                        |
+| update | path                          | title, summary, attrs, contentUpdates |
+| delete | path                          | -                            |
+| move   | path, to                      | -                            |
+
+## title + summary の書き方
+
+**「ひとつづきのサマリ」として連結して読める形式で記述する**
+
+- title: 見出し部分（10-50文字）
+- summary: 詳細部分（50-300文字）
+- 両者の内容重複は禁止
+- path から想像できる以上の情報を含める
+
+例:
+\`\`\`
+title: "OAuth2.0認証フロー実装"
+summary: "Google/GitHub連携対応。JWT発行、リフレッシュトークン管理、セッション有効期限7日。2FAはオプション対応"
+\`\`\`
 
 ## contentUpdates の操作タイプ
 
@@ -358,7 +409,8 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
 
 ### regexp_replace - 正規表現置換
 pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
-    mutateContextSchema,
+      inputSchema: mutateContextSchema
+    },
     async (args) => {
       try {
         const typedArgs = args as { cwd?: string; operations: Parameters<KnowledgeGraphService['mutateContext']>[0] }
@@ -392,10 +444,12 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
     paths: z.array(z.string()).optional().describe('対象パス (省略時は全変更)')
   }
   
-  server.tool(
+  server.registerTool(
     'ocd_commit',
-    `[OCD] 変更をコミット (git: 'manual' モード用)${isLocalDev ? '（cwd から設定を探索）' : ''}`,
-    commitSchema,
+    {
+      description: `[OCD] 変更をコミット (git: 'manual' モード用)${isLocalDev ? '（cwd から設定を探索）' : ''}`,
+      inputSchema: commitSchema
+    },
     async (args) => {
       try {
         const typedArgs = args as { cwd?: string; message: string; paths?: string[] }

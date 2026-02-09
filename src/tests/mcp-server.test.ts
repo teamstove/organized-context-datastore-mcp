@@ -146,7 +146,7 @@ priority: high
     
     it('should handle getContextTree', async () => {
       const result = await service.getContextTree({
-        rootPath: 'project',
+        rootIds: ['project'],
         format: 'json'  // JSON形式で取得
       })
       
@@ -157,7 +157,7 @@ priority: high
     
     it('should handle getContextTree with tree-text format', async () => {
       const result = await service.getContextTree({
-        rootPath: 'project',
+        rootIds: ['project'],
         format: 'tree-text'
       })
       
@@ -174,10 +174,13 @@ priority: high
     })
     
     it('should handle mutateContext with create operation', async () => {
+      // path, title, summary, content は必須
       const result = await service.mutateContext([{
         type: 'create',
-        path: 'project/features',
-        title: 'New Feature',
+        path: 'project/features/new-feature',
+        content: '# New Feature\n\nThis is a new feature.',
+        title: 'New Feature Implementation',
+        summary: 'OAuth2.0 authentication flow with JWT token management and session handling',
         attrs: { status: 'draft' }
       }])
       
@@ -185,7 +188,7 @@ priority: high
       expect(result.errors).toBe(0)
       expect(result.results[0].success).toBe(true)
       expect(result.results[0].type).toBe('create')
-      expect(result.results[0].path).toContain('New-Feature')
+      expect(result.results[0].path).toBe('project/features/new-feature')
     })
     
     it('should handle mutateContext with update operation', async () => {
@@ -220,16 +223,18 @@ priority: high
     })
     
     it('should handle multiple operations in batch', async () => {
-      // 複数種類の操作を一度に実行
+      // 複数種類の操作を一度に実行（path は完全なパス、content は必須）
       const result = await service.mutateContext([
         {
           type: 'create',
-          path: 'project/features',
+          path: 'project/features/batch-feature-1',
+          content: '# Batch Feature 1\n\nContent 1',
           title: 'Batch Feature 1'
         },
         {
           type: 'create',
-          path: 'project/features',
+          path: 'project/features/batch-feature-2',
+          content: '# Batch Feature 2\n\nContent 2',
           title: 'Batch Feature 2'
         }
       ])

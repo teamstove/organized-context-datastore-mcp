@@ -387,8 +387,7 @@ async function executeToolCall(
     
     case 'get_context_tree':
       return await service.getContextTree({
-        rootPath: args.rootPath as string | undefined,
-        rootPaths: args.rootPaths as string[] | undefined,
+        rootIds: args.rootIds as string[],
         depth: args.depth as number | undefined,
         format: args.format as 'json' | 'tree-text' | undefined,
         treeTextFormat: args.treeTextFormat as string | undefined,
@@ -661,19 +660,22 @@ function getLocalDevToolDefinitions(serverMode: ServerMode): Array<{
     },
     {
       name: 'get_context_tree',
-      description: 'コンテキストツリー(目次)を取得します',
+      description: 'コンテキストツリー(目次)を取得します。rootIds には list_context_roots で取得した id を使用してください。',
       inputSchema: {
         type: 'object',
         properties: {
           cwd: { type: 'string', description: '作業ディレクトリ' },
-          rootPath: { type: 'string', description: 'ルートパス' },
-          rootPaths: { type: 'array', items: { type: 'string' }, description: 'ルートパス配列' },
+          rootIds: { 
+            type: 'array', 
+            items: { type: 'string' }, 
+            description: 'Context Root の id 配列（例: ["tairikut-docs"]）。list_context_roots で取得した id を使用'
+          },
           depth: { type: 'number', description: '深さ制限' },
           format: { type: 'string', enum: ['tree-text', 'json'], description: '出力形式' },
-          treeTextFormat: { type: 'string', description: '表示フォーマット (default: $path: $title)' },
+          treeTextFormat: { type: 'string', description: '表示フォーマット (default: $path: $title $summary)' },
           maxNodes: { type: 'number', description: '返却ノード数上限' }
         },
-        required: ['cwd']
+        required: ['cwd', 'rootIds']
       }
     },
     {

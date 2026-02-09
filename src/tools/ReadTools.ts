@@ -40,13 +40,11 @@ export class ReadTools {
   
   /**
    * 利用可能な Context Root 一覧を取得
+   * 
+   * @returns ContextRootConfig[] - id を他のツール (get_context_tree, get_contexts, mutate_context) のパス指定に使用
    */
-  async listContextRoots(): Promise<(ContextRootConfig & { rootPath: string })[]> {
-    // rootPath フィールドを追加（他のツールで使用するパス = id）
-    return this.contextRoots.map(root => ({
-      ...root,
-      rootPath: root.id
-    }))
+  async listContextRoots(): Promise<ContextRootConfig[]> {
+    return this.contextRoots
   }
 
   // ==========================================================================
@@ -196,89 +194,86 @@ export class ReadTools {
    * - rootPath: ルートパス
    * - depth: 深さ (default: 全階層)
    * - format: 'json' | 'tree-text' (default: 'tree-text')
-   * - treeTextFormat: 表示フォーマット (default: '$path: $title')
+   * - treeTextFormat: 表示フォーマット (default: '$path: $title $summary')
    * - maxNodes: 返却ノード数上限 (default: 1000)
    */
   /**
-   * コンテキストツリーを取得（配列対応）
+   * コンテキストツリーを取得
    * 
    * @param options オプション
-   * @returns rootPaths指定時は ContextTreeResults、それ以外は ContextTreeResult
+   * @returns 単一 rootId の場合は ContextTreeResult、複数の場合は ContextTreeResults
    */
   async getContextTree(options: GetContextTreeOptions): Promise<ContextTreeResult | ContextTreeResults> {
     const { 
-      rootPath: singleRootPath, 
-      rootPaths,
+      rootIds,
       depth,
       format = 'tree-text',
-      treeTextFormat = '$path: $title',
+      treeTextFormat = '$path: $title $summary',
       maxNodes = 1000
     } = options
     
-    // 複数パス指定の場合
-    if (rootPaths && rootPaths.length > 0) {
-      const results: ContextTreeResult[] = []
-      let totalNodes = 0
-      let truncated = false
-      
-      for (const rootPath of rootPaths) {
-        // id はそのまま使用（CompositeStore が id でルーティング）
-        const result = await this.getContextTreeSingle({
-          rootPath,
-          depth,
-          format,
-          treeTextFormat,
-          maxNodes
-        })
-        results.push(result)
-        totalNodes += result.totalNodes
-        if (result.truncated) truncated = true
-      }
-      
-      return {
-        results,
-        totalNodes,
-        truncated
-      }
+    if (!rootIds || rootIds.length === 0) {
+      throw new Error('rootIds is required (例: ["tairikut-docs"])')
     }
     
-    // 単一パス指定の場合（後方互換）
-    if (!singleRootPath) {
-      throw new Error('rootPath or rootPaths is required')
+    // 単一 ID の場合は直接結果を返す（従来の ContextTreeResult 形式）
+    if (rootIds.length === 1) {
+      return this.getContextTreeSingle({
+        rootId: rootIds[0],
+        depth,
+        format,
+        treeTextFormat,
+        maxNodes
+      })
     }
     
-    // id はそのまま使用（CompositeStore が id でルーティング）
-    return this.getContextTreeSingle({
-      rootPath: singleRootPath,
-      depth,
-      format,
-      treeTextFormat,
-      maxNodes
-    })
+    // 複数 ID の場合は ContextTreeResults 形式
+    const results: ContextTreeResult[] = []
+    let totalNodes = 0
+    let truncated = false
+    
+    for (const rootId of rootIds) {
+      const result = await this.getContextTreeSingle({
+        rootId,
+        depth,
+        format,
+        treeTextFormat,
+        maxNodes
+      })
+      results.push(result)
+      totalNodes += result.totalNodes
+      if (result.truncated) truncated = true
+    }
+    
+    return {
+      results,
+      totalNodes,
+      truncated
+    }
   }
   
   /**
-   * 単一ルートパスのコンテキストツリーを取得
+   * 単一 Context Root ID のコンテキストツリーを取得
    */
   private async getContextTreeSingle(options: {
-    rootPath: string
+    rootId: string
     depth?: number
     format?: 'json' | 'tree-text'
     treeTextFormat?: string
     maxNodes?: number
   }): Promise<ContextTreeResult> {
     const { 
-      rootPath, 
+      rootId, 
       depth,
       format = 'tree-text',
-      treeTextFormat = '$path: $title',
+      treeTextFormat = '$path: $title $summary',
       maxNodes = 1000
     } = options
     
     // パターンを構築
     const patterns = depth !== undefined
-      ? this.buildDepthPatterns(rootPath, depth)
-      : [`${rootPath}/**/*.md`]
+      ? this.buildDepthPatterns(rootId, depth)
+      : [`${rootId}/**/*.md`]
     
     // ファイル一覧取得
     const files = await this.store.listMultiple(patterns)
@@ -309,13 +304,13 @@ export class ReadTools {
         format: 'json',
         totalNodes,
         truncated,
-        rootPath
+        rootId
       }
     }
     
     // tree-text 形式
     const treeText = this.renderTreeText(
-      rootPath,
+      rootId,
       limitedSummaries,
       { treeTextFormat }
     )
@@ -325,7 +320,7 @@ export class ReadTools {
       format: 'tree-text',
       totalNodes,
       truncated,
-      rootPath
+      rootId
     }
   }
   
@@ -478,9 +473,9 @@ export class ReadTools {
    * 
    * @param relativePath 相対パス
    * @param summary サマリー
-   * @param format フォーマット文字列 (例: "$path: $title")
+   * @param format フォーマット文字列 (例: "$path: $title $summary")
    * 
-   * 使用可能な変数: $path, $title
+   * 使用可能な変数: $path, $title, $summary
    */
   private formatTreeLine(
     relativePath: string,
@@ -490,6 +485,7 @@ export class ReadTools {
     return format
       .replace(/\$path/g, relativePath)
       .replace(/\$title/g, summary.title)
+      .replace(/\$summary/g, summary.summary || '')
   }
   
   /**
@@ -694,10 +690,19 @@ export class ReadTools {
       f !== filePath
     )
     
+    // summary は attrs から取得（frontmatter の summary フィールド）
+    const summary = typeof context.attrs.summary === 'string' 
+      ? context.attrs.summary 
+      : undefined
+    
+    // attrs から summary を除外（重複を避ける）
+    const { summary: _ignoredSummary, ...restAttrs } = context.attrs
+    
     return {
       path: context.path,
       title: context.title,
-      attrs: context.attrs,
+      summary,
+      attrs: restAttrs,
       updatedAt: context.updatedAt,
       hasChildren: childFiles.length > 0,
       childCount: childFiles.length

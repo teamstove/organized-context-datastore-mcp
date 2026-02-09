@@ -245,13 +245,24 @@ export class FileGitStore implements IKnowledgeStore {
   }
   
   async list(pattern: string): Promise<string[]> {
-    // ignorePatterns が設定されている場合は除外
-    const files = await glob(pattern, {
-      cwd: this.rootPath,
-      nodir: true,
-      ignore: this.ignorePatterns
-    })
-    return files.sort()
+    // 具体的なパス（* を含まない、.md で終わらない）の場合は
+    // 複数のパターンでマッチを試みる
+    const expandedPatterns = this.expandPattern(pattern)
+    
+    const allFiles: Set<string> = new Set()
+    
+    for (const p of expandedPatterns) {
+      const files = await glob(p, {
+        cwd: this.rootPath,
+        nodir: true,
+        ignore: this.ignorePatterns
+      })
+      for (const file of files) {
+        allFiles.add(file)
+      }
+    }
+    
+    return [...allFiles].sort()
   }
   
   /**
@@ -290,6 +301,38 @@ export class FileGitStore implements IKnowledgeStore {
     }
     
     return [...allFiles].sort()
+  }
+  
+  /**
+   * パターンを拡張
+   * 
+   * 具体的なパス（* を含まない、.md で終わらない）の場合、
+   * 複数のパターンに展開してファイルを見つけやすくする
+   * 
+   * 例: "docs/feature" → ["docs/feature", "docs/feature.md", "docs/feature/**\/*.md"]
+   */
+  private expandPattern(pattern: string): string[] {
+    // 既にワイルドカードを含む場合はそのまま
+    if (pattern.includes('*')) {
+      return [pattern]
+    }
+    
+    // .md で終わる場合はそのまま
+    if (pattern.endsWith('.md')) {
+      return [pattern]
+    }
+    
+    // 空の場合は全ファイル
+    if (pattern === '' || pattern === '.') {
+      return ['**/*.md']
+    }
+    
+    // 具体的なパスの場合は複数パターンに展開
+    return [
+      pattern,                        // そのままのパス（ディレクトリの場合）
+      `${pattern}.md`,                // 拡張子を追加
+      `${pattern}/**/*.md`            // ディレクトリ配下の全ファイル
+    ]
   }
   
   async getMetadata(relativePath: string): Promise<FileMetadata> {

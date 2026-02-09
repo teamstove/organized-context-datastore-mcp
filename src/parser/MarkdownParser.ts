@@ -305,6 +305,7 @@ export function toContextNode(
   // attrs を構築 (title と related 以外の全フィールド)
   const { title: _title, related: _related, ...attrs } = frontmatter
   
+  // sections は内部処理でのみ使用、レスポンスには含めない (Token数節約)
   return {
     path,
     title: title ?? path,
@@ -317,7 +318,6 @@ export function toContextNode(
     },
     content,
     annotations,
-    todos,
-    sections
+    todos
   }
 }

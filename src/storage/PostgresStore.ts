@@ -604,8 +604,7 @@ summary: ""
       frontmatter: extraFrontmatter,
       links: { to: [], from: [] },
       annotations: [],
-      todos: [],
-      sections: []
+      todos: []
     }
   }
   
