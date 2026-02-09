@@ -11,6 +11,7 @@
  */
 import { reactive, readonly, type InjectionKey, type DeepReadonly } from 'vue'
 import type { ViewMode, Theme, UISettings, TreeSettings, TreeSortMode, CodeTheme, ContentWidthMode } from '@/types'
+import { clampFontSize } from '@/types'
 import { createStorage } from '@/utils/StorageHelper'
 
 // =============================================================================
@@ -27,6 +28,21 @@ const TREE_SETTINGS_KEY = 'ocd-tree-settings'
 const uiStorage = createStorage<UISettings>(STORAGE_KEY, '[UIService]')
 const treeStorage = createStorage<TreeSettings>(TREE_SETTINGS_KEY, '[UIService:Tree]')
 
+/** 旧プリセットまたは数値を正規化（後方互換） */
+function normalizeFontSize(
+  value: unknown,
+  fallback: number
+): number {
+  if (typeof value === 'number' && !Number.isNaN(value)) {
+    return clampFontSize(value)
+  }
+  // 旧 FontSizePreset から変換
+  if (value === 'small') return 12
+  if (value === 'normal') return 14
+  if (value === 'large') return 16
+  return clampFontSize(fallback)
+}
+
 // =============================================================================
 // デフォルト値
 // =============================================================================
@@ -36,17 +52,19 @@ const DEFAULT_UI_SETTINGS: UISettings = {
   sidebarOpen: true,
   theme: 'system',
   codeTheme: 'monokai', // デフォルトは Monokai
-  contentWidthMode: 'normal', // メインコンテンツ幅: 通常
+  contentWidthMode: 'wide', // メインコンテンツ幅: 幅広（パネルいっぱいに表示）
   showToc: true, // 目次を表示（デフォルトオン）
-  tocStickyRight: false, // 目次は本文上に表示（右カラム Sticky はオフ）
+  tocStickyRight: true, // 目次を右カラムで Sticky 固定表示（デフォルトオン）
+  treeFontSize: 14, // ツリーの基本フォントサイズ (px)
+  contentFontSize: 16, // コンテンツの基本フォントサイズ (px)
 }
 
 const DEFAULT_TREE_SETTINGS: TreeSettings = {
-  stickyDirs: false,
-  wrapTitles: false,
-  sortMode: 'name-only',
-  showFileName: true, // デフォルトでファイル名を表示
-  showSummary: false, // デフォルトで summary は非表示
+  stickyDirs: true, // ディレクトリ名を固定表示（デフォルトオン）
+  wrapTitles: false, // タイトルを折り返し表示（デフォルトオフ）
+  sortMode: 'name-only', // 名前順（001_, 002_ 等の順番を維持）
+  showFileName: true, // ファイル名を表示（デフォルトオン）
+  showSummary: true, // Summary を表示（デフォルトオン）
 }
 
 // =============================================================================
@@ -68,6 +86,10 @@ export interface UIServiceState {
   showToc: boolean
   /** 目次を右カラムで Sticky 固定表示するか */
   tocStickyRight: boolean
+  /** ツリー（左ペイン）の基本フォントサイズ (px) */
+  treeFontSize: number
+  /** コンテンツ（右ペイン）の基本フォントサイズ (px) */
+  contentFontSize: number
   /** ツリー表示設定 */
   treeSettings: TreeSettings
   /** 設定ダイアログ表示状態 */
@@ -121,6 +143,8 @@ export class UIService {
       contentWidthMode: uiSettings.contentWidthMode ?? DEFAULT_UI_SETTINGS.contentWidthMode,
       showToc: uiSettings.showToc ?? DEFAULT_UI_SETTINGS.showToc,
       tocStickyRight: uiSettings.tocStickyRight ?? DEFAULT_UI_SETTINGS.tocStickyRight,
+      treeFontSize: normalizeFontSize(uiSettings.treeFontSize, DEFAULT_UI_SETTINGS.treeFontSize),
+      contentFontSize: normalizeFontSize(uiSettings.contentFontSize, DEFAULT_UI_SETTINGS.contentFontSize),
       treeSettings,
       settingsDialogOpen: false,
       // 編集機能関連
@@ -214,6 +238,22 @@ export class UIService {
    */
   setTocStickyRight(sticky: boolean): void {
     this._state.tocStickyRight = sticky
+    this.saveUISettings()
+  }
+
+  /**
+   * ツリーの基本フォントサイズを設定 (px)
+   */
+  setTreeFontSize(px: number): void {
+    this._state.treeFontSize = clampFontSize(px)
+    this.saveUISettings()
+  }
+
+  /**
+   * コンテンツの基本フォントサイズを設定 (px)
+   */
+  setContentFontSize(px: number): void {
+    this._state.contentFontSize = clampFontSize(px)
     this.saveUISettings()
   }
 
@@ -361,6 +401,8 @@ export class UIService {
       contentWidthMode: this._state.contentWidthMode,
       showToc: this._state.showToc,
       tocStickyRight: this._state.tocStickyRight,
+      treeFontSize: this._state.treeFontSize,
+      contentFontSize: this._state.contentFontSize,
     })
   }
 

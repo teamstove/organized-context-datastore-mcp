@@ -30,6 +30,10 @@
     --code-bg: 215 28% 7%;
     --code-text: 210 40% 90%;
     --code-inline-bg: 215 28% 17%;
+
+    /* フォントサイズ（App.vue で動的に上書き） */
+    --tree-base-font-size: 14px;
+    --content-base-font-size: 16px;
   }
 
   .dark {
@@ -87,9 +91,9 @@
   @apply bg-muted-foreground/50;
 }
 
-/* Markdown コンテンツ用スタイル */
+/* Markdown コンテンツ用スタイル（フォントサイズは親 content-font-area から継承） */
 .markdown-content {
-  @apply prose prose-sm dark:prose-invert max-w-none;
+  @apply prose dark:prose-invert max-w-none;
 }
 
 /* コードブロック（pre）は Light/Dark 両方で暗い背景をキープ */
@@ -124,3 +128,29 @@
 .tree-node.selected {
   @apply bg-primary/10 text-primary;
 }
+
+/* ツリーのフォントサイズ継承用（設定で変更可能） */
+.tree-font-area {
+  font-size: var(--tree-base-font-size, 14px);
+}
+
+.tree-node-title {
+  font-size: 1em;
+}
+
+.tree-node-meta {
+  font-size: 0.857em;
+}
+
+/* コンテンツ領域のフォントサイズ継承用（右ペイン全体に適用） */
+.content-font-area {
+  font-size: var(--content-base-font-size, 16px);
+}
+
+.content-text-xs { font-size: 0.75em; }
+.content-text-sm { font-size: 0.875em; }
+.content-text-base { font-size: 1em; }
+.content-text-lg { font-size: 1.125em; }
+.content-text-xl { font-size: 1.25em; }
+.content-text-2xl { font-size: 1.5em; }
+.content-text-3xl { font-size: 1.875em; }

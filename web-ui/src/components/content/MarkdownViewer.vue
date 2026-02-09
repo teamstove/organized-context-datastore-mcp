@@ -293,7 +293,7 @@ watchEffect(() => {
 <template>
   <div
     ref="contentRef"
-    class="markdown-content prose prose-sm dark:prose-invert max-w-none"
+    class="markdown-content prose dark:prose-invert max-w-none"
     v-html="renderedHtml"
   />
 </template>

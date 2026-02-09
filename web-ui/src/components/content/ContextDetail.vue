@@ -240,29 +240,29 @@ function handleDelete(): void {
 </script>
 
 <template>
-  <div v-if="context" :class="contentWrapperClass">
+  <div v-if="context" :class="[contentWrapperClass, 'content-font-area']">
     <!-- ヘッダー -->
     <header class="mb-6">
       <!-- パス -->
-      <div class="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+      <div class="flex items-center gap-2 content-text-sm text-muted-foreground mb-2">
         <FileText class="w-4 h-4" />
         <span class="font-mono">{{ context.path }}</span>
       </div>
 
       <!-- タイトル -->
-      <h1 class="text-3xl font-bold mb-3">{{ context.title }}</h1>
+      <h1 class="content-text-3xl font-bold mb-3">{{ context.title }}</h1>
 
       <!-- Summary（タイトル直下に alert スタイルで表示） -->
       <div
         v-if="summary"
-        class="mb-4 p-3 rounded-lg border border-border/50 bg-muted/30 text-sm text-muted-foreground"
+        class="mb-4 p-3 rounded-lg border border-border/50 bg-muted/30 content-text-sm text-muted-foreground"
       >
         {{ summary }}
       </div>
 
       <!-- メタ情報 & 表示モード切り替え -->
       <div class="flex flex-wrap items-center justify-between gap-4">
-        <div class="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
+        <div class="flex flex-wrap items-center gap-4 content-text-sm text-muted-foreground">
           <div class="flex items-center gap-1.5">
             <Calendar class="w-4 h-4" />
             <span>更新: {{ formatDate(context.updatedAt) }}</span>
@@ -280,7 +280,7 @@ function handleDelete(): void {
             <button
               @click="setViewMode('preview')"
               :class="[
-                'flex items-center gap-1.5 px-2.5 py-1 rounded text-sm transition-colors',
+                'flex items-center gap-1.5 px-2.5 py-1 rounded content-text-sm transition-colors',
                 viewMode === 'preview' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
               ]"
               title="プレビュー表示"
@@ -291,7 +291,7 @@ function handleDelete(): void {
             <button
               @click="setViewMode('source')"
               :class="[
-                'flex items-center gap-1.5 px-2.5 py-1 rounded text-sm transition-colors',
+                'flex items-center gap-1.5 px-2.5 py-1 rounded content-text-sm transition-colors',
                 viewMode === 'source' ? 'bg-primary text-primary-foreground' : 'hover:bg-accent'
               ]"
               title="Markdown ソース表示"
@@ -305,7 +305,7 @@ function handleDelete(): void {
           <button
             v-if="isEditable"
             @click="handleEdit"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border hover:bg-accent transition-colors"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md content-text-sm border hover:bg-accent transition-colors"
             title="編集"
           >
             <Pencil class="w-4 h-4" />
@@ -316,7 +316,7 @@ function handleDelete(): void {
           <button
             v-if="isEditable"
             @click="handleDelete"
-            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm border border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors"
+            class="flex items-center gap-1.5 px-3 py-1.5 rounded-md content-text-sm border border-destructive/50 text-destructive hover:bg-destructive/10 transition-colors"
             title="削除"
           >
             <Trash2 class="w-4 h-4" />
@@ -346,7 +346,7 @@ function handleDelete(): void {
           <span
             v-for="(item, i) in value"
             :key="`${key}-${i}`"
-            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-muted border border-border/50"
+            class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg content-text-xs bg-muted border border-border/50"
           >
             <span class="text-muted-foreground">{{ key }}:</span>
             <span class="font-medium">{{ item }}</span>
@@ -355,7 +355,7 @@ function handleDelete(): void {
         <!-- 単一値の場合 -->
         <span
           v-else
-          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs bg-muted border border-border/50"
+          class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md content-text-xs bg-muted border border-border/50"
         >
           <span class="text-muted-foreground">{{ key }}:</span>
           <span class="font-medium">{{ value }}</span>
@@ -384,7 +384,7 @@ function handleDelete(): void {
         <!-- ソースモード -->
         <div
           v-else
-          class="bg-muted/50 rounded-lg p-4 font-mono text-sm whitespace-pre-wrap overflow-x-auto"
+          class="bg-muted/50 rounded-lg p-4 font-mono content-text-sm whitespace-pre-wrap overflow-x-auto"
         >
           <pre class="text-foreground">{{ context.content }}</pre>
         </div>

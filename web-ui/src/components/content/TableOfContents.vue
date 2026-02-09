@@ -125,7 +125,7 @@ watch(
       <h2
         :class="[
           'font-semibold text-muted-foreground',
-          stickyRight ? 'text-xs' : 'text-sm'
+          stickyRight ? 'content-text-xs' : 'content-text-sm'
         ]"
       >
         目次
@@ -145,7 +145,7 @@ watch(
       v-show="isOpen"
       :class="[
         'border-t border-border/50',
-        stickyRight ? 'text-xs' : 'text-sm'
+        stickyRight ? 'content-text-xs' : 'content-text-sm'
       ]"
     >
       <li

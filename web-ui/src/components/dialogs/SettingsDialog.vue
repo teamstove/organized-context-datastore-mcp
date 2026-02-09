@@ -12,7 +12,7 @@ import { X, Settings, Code2, PanelRightOpen } from 'lucide-vue-next'
 import { uiServiceKey, type UIService } from '@/services/UIService'
 import { contextServiceKey, type ContextService } from '@/services/ContextService'
 import type { TreeSortMode, CodeTheme, ContentWidthMode } from '@/types'
-import { CODE_THEME_LABELS } from '@/types'
+import { CODE_THEME_LABELS, FONT_SIZE_MIN, FONT_SIZE_MAX } from '@/types'
 
 // =============================================================================
 // Service の inject
@@ -35,6 +35,8 @@ const codeTheme = computed(() => uiService.state.codeTheme)
 const contentWidthMode = computed(() => uiService.state.contentWidthMode)
 const showToc = computed(() => uiService.state.showToc)
 const tocStickyRight = computed(() => uiService.state.tocStickyRight)
+const treeFontSize = computed(() => uiService.state.treeFontSize)
+const contentFontSize = computed(() => uiService.state.contentFontSize)
 
 /** 利用可能なコードテーマ一覧 */
 const availableCodeThemes = Object.entries(CODE_THEME_LABELS) as [CodeTheme, string][]
@@ -100,6 +102,28 @@ function handleToggleShowToc() {
 function handleToggleTocStickyRight() {
   uiService.setTocStickyRight(!tocStickyRight.value)
 }
+
+/**
+ * ツリーのフォントサイズを変更 (px)
+ */
+function handleTreeFontSizeChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const value = parseInt(target.value, 10)
+  if (!Number.isNaN(value)) {
+    uiService.setTreeFontSize(value)
+  }
+}
+
+/**
+ * コンテンツのフォントサイズを変更 (px)
+ */
+function handleContentFontSizeChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const value = parseInt(target.value, 10)
+  if (!Number.isNaN(value)) {
+    uiService.setContentFontSize(value)
+  }
+}
 </script>
 
 <template>
@@ -107,7 +131,7 @@ function handleToggleTocStickyRight() {
   <Teleport to="body">
     <div
       v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center"
+      class="fixed inset-0 z-[200] flex items-center justify-center"
     >
       <!-- 背景 -->
       <div
@@ -167,6 +191,47 @@ function handleToggleTocStickyRight() {
             </div>
             <p class="text-xs text-muted-foreground">
               通常: 最大幅を制限して読みやすく表示。幅広: パネルいっぱいに表示。
+            </p>
+          </div>
+
+          <!-- フォントサイズ -->
+          <div class="space-y-3">
+            <h3 class="text-sm font-medium text-muted-foreground">フォントサイズ</h3>
+
+            <!-- ツリー（左ペイン） -->
+            <div>
+              <div class="font-medium text-sm mb-1">ツリー（左側のファイル一覧）</div>
+              <div class="flex items-center gap-2">
+                <input
+                  type="number"
+                  :min="FONT_SIZE_MIN"
+                  :max="FONT_SIZE_MAX"
+                  :value="treeFontSize"
+                  @input="handleTreeFontSizeChange"
+                  class="w-20 px-3 py-2 rounded-md border bg-background text-sm"
+                />
+                <span class="text-sm text-muted-foreground">px</span>
+              </div>
+            </div>
+
+            <!-- コンテンツ（右ペイン） -->
+            <div>
+              <div class="font-medium text-sm mb-1">コンテンツ（右側のドキュメント）</div>
+              <div class="flex items-center gap-2">
+                <input
+                  type="number"
+                  :min="FONT_SIZE_MIN"
+                  :max="FONT_SIZE_MAX"
+                  :value="contentFontSize"
+                  @input="handleContentFontSizeChange"
+                  class="w-20 px-3 py-2 rounded-md border bg-background text-sm"
+                />
+                <span class="text-sm text-muted-foreground">px</span>
+              </div>
+            </div>
+
+            <p class="text-xs text-muted-foreground">
+              左側のファイルツリーと右側のドキュメントの基本フォントサイズを px で指定できます（{{ FONT_SIZE_MIN }}-{{ FONT_SIZE_MAX }}px）。
             </p>
           </div>
 

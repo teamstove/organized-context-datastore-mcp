@@ -5,6 +5,7 @@
  * 役割:
  * - 基本レイアウトの定義
  * - テーマの適用
+ * - フォントサイズ CSS 変数の適用
  * - プロジェクト情報の復元
  *
  * ロジックは UIService / ProjectService に委譲し、最小限の実装のみ
@@ -52,6 +53,13 @@ watchEffect(() => {
       root.classList.remove('dark')
     }
   }
+})
+
+// フォントサイズ設定を監視して CSS 変数を :root に適用
+watchEffect(() => {
+  const root = document.documentElement
+  root.style.setProperty('--tree-base-font-size', `${uiService.state.treeFontSize}px`)
+  root.style.setProperty('--content-base-font-size', `${uiService.state.contentFontSize}px`)
 })
 </script>
 

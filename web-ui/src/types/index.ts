@@ -168,6 +168,18 @@ export const CODE_THEME_LABELS: Record<CodeTheme, string> = {
  */
 export type ContentWidthMode = 'normal' | 'wide'
 
+/** フォントサイズの最小値 (px) */
+export const FONT_SIZE_MIN = 10
+/** フォントサイズの最大値 (px) */
+export const FONT_SIZE_MAX = 28
+
+/**
+ * フォントサイズを有効範囲にクランプ
+ */
+export function clampFontSize(px: number): number {
+  return Math.max(FONT_SIZE_MIN, Math.min(FONT_SIZE_MAX, Math.round(px)))
+}
+
 /**
  * UI 設定
  */
@@ -183,6 +195,10 @@ export interface UISettings {
   showToc: boolean
   /** 目次を右カラムで Sticky 固定表示するか（false のときは本文上に表示） */
   tocStickyRight: boolean
+  /** ツリー（左ペイン）の基本フォントサイズ (px) */
+  treeFontSize: number
+  /** コンテンツ（右ペイン）の基本フォントサイズ (px) */
+  contentFontSize: number
 }
 
 /**
