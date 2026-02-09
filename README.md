@@ -69,6 +69,8 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 | `--mode <mode>` | HTTP のみ: local-dev / remote-server |
 | `--config <path>` | remote-server モード用の設定ファイル |
 
+**重複起動時**: 同じポートで既に OCD が動いている場合、2 回目以降の起動は「すでに同じポートで OCD が起動しています」とログして正常終了（exit 0）します。ポートが別プロセスで使用中のときのみエラー終了します。サーバー種別の判定には **GET /whois** を使用しており、応答が `OCD` であれば自サーバーとみなします。
+
 ---
 
 ## Cursor / IDE 設定

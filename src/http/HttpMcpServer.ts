@@ -18,6 +18,7 @@ import { fileURLToPath } from 'url'
 import { ProjectRegistry, type HttpServerConfig, type ProjectConfig } from './ProjectRegistry.js'
 import { createMcpRoutes, createLocalDevMcpRoutes } from './routes/mcpRoutes.js'
 import { createRestRoutes } from './routes/restRoutes.js'
+import { isOcdListening } from './whoisCheck.js'
 import type { ServerMode } from '../types/index.js'
 
 /**
@@ -80,7 +81,10 @@ export class HttpMcpServer {
         transport: 'streamable-http'
       })
     })
-    
+    // サーバー種別判定用（重複起動時の EADDRINUSE 対策で既存プロセスが OCD かどうか確認する）
+    this.app.get('/whois', (_req: Request, res: Response) => {
+      res.type('text/plain').send('OCD')
+    })
     // サーバー情報
     this.app.get('/info', (req: Request, res: Response) => {
       res.json({
@@ -164,6 +168,22 @@ export class HttpMcpServer {
         console.log(`[HttpMcpServer] Transport: Streamable HTTP (MCP 2025-03-26)`)
         console.log(`[HttpMcpServer] 登録プロジェクト: ${this.registry.listProjects().length}件`)
         resolve()
+      })
+      this.server.once('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          isOcdListening(port).then((isOcd) => {
+            if (isOcd) {
+              console.error(`[OCD-MCP] すでに同じポート (${port}) で OCD が起動しています。`)
+              process.exit(0)
+            } else {
+              console.error(`[OCD-MCP] ポート ${port} は別プロセスで使用中です。`)
+              process.exit(1)
+            }
+          })
+        } else {
+          console.error('[OCD-MCP] HTTP サーバー起動エラー:', err.message)
+          process.exit(1)
+        }
       })
     })
   }
@@ -314,7 +334,10 @@ class LocalDevHttpServer {
         mode: 'local-dev'
       })
     })
-    
+    // サーバー種別判定用（重複起動時の EADDRINUSE 対策で既存プロセスが OCD かどうか確認する）
+    this.app.get('/whois', (_req: Request, res: Response) => {
+      res.type('text/plain').send('OCD')
+    })
     // サーバー情報
     this.app.get('/info', (req: Request, res: Response) => {
       res.json({
@@ -383,6 +406,22 @@ class LocalDevHttpServer {
         console.error(`[OCD-MCP] Mode: local-dev (cwd-based config discovery)`)
         console.error(`[OCD-MCP] Readonly: ${this.serverMode.readonly}`)
         resolve()
+      })
+      this.server.once('error', (err: NodeJS.ErrnoException) => {
+        if (err.code === 'EADDRINUSE') {
+          isOcdListening(port).then((isOcd) => {
+            if (isOcd) {
+              console.error(`[OCD-MCP] すでに同じポート (${port}) で OCD が起動しています。`)
+              process.exit(0)
+            } else {
+              console.error(`[OCD-MCP] ポート ${port} は別プロセスで使用中です。`)
+              process.exit(1)
+            }
+          })
+        } else {
+          console.error('[OCD-MCP] HTTP サーバー起動エラー:', err.message)
+          process.exit(1)
+        }
       })
     })
   }
