@@ -99,11 +99,14 @@ export class ContextService {
   private projectService: ProjectService
   private uiService: UIService
 
-  // ツリーキャッシュ (rootId -> ContextNodeSummary[])
-  private treeCache = new Map<string, ContextNodeSummary[]>()
+  /** ツリーキャッシュの TTL（ミリ秒）。データ鮮度優先のため 30 秒 */
+  private static readonly TREE_CACHE_TTL_MS = 30 * 1000
 
-  // ソートモード変更時の再ソート用にフラットなノードをキャッシュ
-  private flatNodesCache = new Map<string, ContextNodeSummary[]>()
+  // ツリーキャッシュ (key -> { data, expiresAt })
+  private treeCache = new Map<string, { data: ContextNodeSummary[]; expiresAt: number }>()
+
+  // ソートモード変更時の再ソート用にフラットなノードをキャッシュ (key -> { data, expiresAt })
+  private flatNodesCache = new Map<string, { data: ContextNodeSummary[]; expiresAt: number }>()
 
   // ---------------------------------------------------------------------------
   // Public State (readonly)
@@ -207,11 +210,12 @@ export class ContextService {
 
     const sortMode = this.getSortMode()
 
-    // キャッシュをチェック（ソートモード込み）
+    // キャッシュをチェック（ソートモード込み、TTL 30秒）
     const cacheKey = `${rootId}:${depth || 'all'}:${sortMode}`
     const cached = this.treeCache.get(cacheKey)
-    if (cached) {
-      this._state.tree = cached
+    const now = Date.now()
+    if (cached && cached.expiresAt > now) {
+      this._state.tree = cached.data
       this.expandAll()
       return
     }
@@ -227,15 +231,16 @@ export class ContextService {
       })
 
       if (result.format === 'json' && Array.isArray(result.tree)) {
+        const expiresAt = Date.now() + ContextService.TREE_CACHE_TTL_MS
         // フラットノードをキャッシュ（ソートモード変更時の再構築用）
         const flatCacheKey = `${rootId}:${depth || 'all'}:flat`
-        this.flatNodesCache.set(flatCacheKey, result.tree)
+        this.flatNodesCache.set(flatCacheKey, { data: result.tree, expiresAt })
 
         // TreeBuilder を使用してフラットなリストを階層構造に変換
         const nestedTree = buildNestedTree(result.tree, rootId, sortMode)
         this._state.tree = nestedTree
         this._state.treeText = null
-        this.treeCache.set(cacheKey, nestedTree)
+        this.treeCache.set(cacheKey, { data: nestedTree, expiresAt })
         // デフォルトですべて展開
         this.expandAll()
       } else if (result.format === 'tree-text' && typeof result.tree === 'string') {
@@ -260,26 +265,30 @@ export class ContextService {
 
     const sortMode = this.getSortMode()
     const flatCacheKey = `${currentRoot.id}:all:flat`
-    const flatNodes = this.flatNodesCache.get(flatCacheKey)
+    const flatEntry = this.flatNodesCache.get(flatCacheKey)
+    const now = Date.now()
 
-    if (!flatNodes) {
-      // フラットノードがない場合は再読み込み
+    if (!flatEntry || flatEntry.expiresAt <= now) {
+      // フラットノードがないか TTL 切れの場合は再読み込み
       this.loadTree(currentRoot.id)
       return
     }
 
-    // ソート済みツリーキャッシュを確認
+    const flatNodes = flatEntry.data
+
+    // ソート済みツリーキャッシュを確認（TTL チェック付き）
     const cacheKey = `${currentRoot.id}:all:${sortMode}`
     const cached = this.treeCache.get(cacheKey)
-    if (cached) {
-      this._state.tree = cached
+    if (cached && cached.expiresAt > now) {
+      this._state.tree = cached.data
       return
     }
 
     // フラットノードから再構築
+    const expiresAt = now + ContextService.TREE_CACHE_TTL_MS
     const nestedTree = buildNestedTree(flatNodes, currentRoot.id, sortMode)
     this._state.tree = nestedTree
-    this.treeCache.set(cacheKey, nestedTree)
+    this.treeCache.set(cacheKey, { data: nestedTree, expiresAt })
   }
 
   // ---------------------------------------------------------------------------
@@ -501,9 +510,11 @@ export class ContextService {
 
   /**
    * キャッシュをクリア
+   * treeCache と flatNodesCache の両方をクリア（mutate 後の即時反映のため）
    */
   clearCache(): void {
     this.treeCache.clear()
+    this.flatNodesCache.clear()
   }
 
   /**

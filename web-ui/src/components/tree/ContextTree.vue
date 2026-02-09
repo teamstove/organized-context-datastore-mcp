@@ -105,7 +105,7 @@ function handleCreate() {
       >
         <ChevronsDownUp class="w-4 h-4" />
       </button>
-      <span class="text-xs text-muted-foreground ml-1 flex-1">
+      <span class="tree-node-meta text-muted-foreground ml-1 flex-1">
         {{ totalNodeCount }} items
         <span v-if="isSearching" class="text-primary">(検索中)</span>
       </span>
@@ -135,7 +135,7 @@ function handleCreate() {
         <!-- データなし -->
         <div
           v-else
-          class="px-4 py-8 text-center text-muted-foreground text-sm"
+          class="px-4 py-8 text-center text-muted-foreground tree-node-title"
         >
           <template v-if="isSearching">
             「{{ searchQuery }}」に一致するコンテキストがありません

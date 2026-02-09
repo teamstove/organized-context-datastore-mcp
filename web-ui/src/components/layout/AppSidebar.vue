@@ -68,8 +68,8 @@ function handleSelectRoot(event: Event) {
       <SearchInput />
     </div>
 
-    <!-- ツリー表示 -->
-    <div class="flex-1 overflow-auto">
+    <!-- ツリー表示（フォントサイズは設定で変更可能） -->
+    <div class="flex-1 overflow-auto tree-font-area">
       <!-- ローディング -->
       <div
         v-if="isTreeLoading"
@@ -84,7 +84,7 @@ function handleSelectRoot(event: Event) {
       <!-- 未選択時 -->
       <div
         v-else
-        class="p-4 text-center text-muted-foreground text-sm"
+        class="p-4 text-center text-muted-foreground tree-node-title"
       >
         Context Root を選択してください
       </div>

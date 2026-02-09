@@ -81,16 +81,17 @@ const indentStyle = computed(() => ({
 }))
 
 // Sticky スタイル（ディレクトリの場合のみ）
+// top は em 単位で、フォントサイズ設定に応じてスケール
 const stickyStyle = computed(() => {
   if (!stickyDirs.value || !hasChildren.value) {
     return {}
   }
-  // ネストレベルに応じた top 位置（前のディレクトリ分の高さを積み上げ）
-  // 各ディレクトリ行は約 24px
+  // ネストレベルに応じた top 位置（1行 ≈ 1.75em）
+  // z-index はツリー内の重なり用に 1〜10 程度に抑え、モーダル backdrop (z-[200]) より常に下になるようにする
   return {
     position: 'sticky' as const,
-    top: `${props.depth * 24}px`,
-    zIndex: 100 - props.depth,
+    top: `calc(${props.depth} * 1.75em)`,
+    zIndex: Math.max(1, 10 - props.depth),
   }
 })
 
@@ -140,15 +141,16 @@ function handleFolderClick(event: Event) {
           // stickyStyle の top は depth * 24px なので、それに合わせて計算
           // オフセット = 閉じるフォルダの上にある全ての sticky 行の top 位置 + 行高さ
           // = (depth * 24) + 25 + 余裕 (8px)
-          const STICKY_ROW_HEIGHT = 25
-          const EXTRA_MARGIN = 8
-          const stickyOffset = stickyDirs.value 
-            ? (props.depth * 24) + STICKY_ROW_HEIGHT + EXTRA_MARGIN
+          // フォントサイズに応じて行高が変わるため、em ベースで概算
+          const rowHeightEm = 1.75
+          const extraMarginEm = 0.5
+          const stickyOffsetEm = stickyDirs.value
+            ? (props.depth * rowHeightEm) + rowHeightEm + extraMarginEm
             : 0
           
           // 一時的に scrollMarginTop を設定してスクロール
           const originalMargin = nodeRowRef.value.style.scrollMarginTop
-          nodeRowRef.value.style.scrollMarginTop = `${stickyOffset}px`
+          nodeRowRef.value.style.scrollMarginTop = `${stickyOffsetEm}em`
           
           nodeRowRef.value.scrollIntoView({
             behavior: 'smooth',
@@ -213,7 +215,7 @@ function handleSelect() {
       <span
         v-if="node.childCount > 0"
         @click="handleFolderClick"
-        class="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded flex-shrink-0 hover:opacity-70 transition-opacity"
+        class="tree-node-meta text-muted-foreground bg-muted px-1.5 py-0.5 rounded flex-shrink-0 hover:opacity-70 transition-opacity"
       >
         {{ node.childCount }}
       </span>
@@ -227,8 +229,8 @@ function handleSelect() {
           node.isVirtual && 'italic text-muted-foreground'
         ]"
       >
-        <!-- タイトル行 -->
-        <div :class="['text-sm', !wrapTitles && 'truncate']">
+        <!-- タイトル行（フォントサイズは親から継承） -->
+        <div :class="['tree-node-title', !wrapTitles && 'truncate']">
           <!-- ファイル名（薄い色） -->
           <span v-if="displayFileName" class="text-muted-foreground/70">{{ displayFileName }}: </span>
           <!-- タイトル -->
@@ -238,7 +240,7 @@ function handleSelect() {
         <div
           v-if="displaySummary"
           :class="[
-            'text-xs text-muted-foreground mt-0.5',
+            'tree-node-meta text-muted-foreground mt-0.5',
             !wrapTitles && 'truncate'
           ]"
         >
