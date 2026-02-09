@@ -8,8 +8,8 @@
  *   ocd-mcp --readonly
  * 
  *   # HTTP サーバーモード
- *   ocd-mcp --http --port 3100
- *   ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
+ *   ocd-mcp --http --port 38291
+ *   ocd-mcp --http --port 38291 --mode remote-server --config /path/to/config.json
  */
 
 import type { ServerMode, ServerModeType } from './types/index.js'
@@ -25,8 +25,14 @@ interface CliArgs {
   /** 読み取り専用 */
   readonly: boolean
   
-  /** HTTP ポート番号 */
+  /** HTTP ポート番号 (HTTP モード時) */
   port: number
+  
+  /** Web UI ポート番号 (stdio モード時に併用、デフォルト 38291) */
+  webUiPort: number
+  
+  /** Web UI を無効化 (デフォルト: false = 有効) */
+  disableWebUi: boolean
   
   /** 設定ファイルパス (remote-server モード用) */
   config?: string
@@ -45,7 +51,9 @@ function parseArgs(): CliArgs {
   // デフォルト値
   let mode: ServerModeType = 'local-dev'
   let readonly = false
-  let port = 3100
+  let port = 38291
+  let webUiPort = 38291
+  let disableWebUi = false
   let config: string | undefined
   let transport: 'http' | 'stdio' = 'stdio' // デフォルトは stdio
   
@@ -84,10 +92,21 @@ function parseArgs(): CliArgs {
     
     // --port
     else if (arg === '--port' || arg === '-p') {
-      port = parseInt(args[i + 1] || '3100', 10)
+      port = parseInt(args[i + 1] || '38291', 10)
       i++
     } else if (arg?.startsWith('--port=')) {
-      port = parseInt(arg.split('=')[1] || '3100', 10)
+      port = parseInt(arg.split('=')[1] || '38291', 10)
+    }
+    // --web-ui-port
+    else if (arg === '--web-ui-port') {
+      webUiPort = parseInt(args[i + 1] || '38291', 10)
+      i++
+    } else if (arg?.startsWith('--web-ui-port=')) {
+      webUiPort = parseInt(arg.split('=')[1] || '38291', 10)
+    }
+    // --disable-web-ui
+    else if (arg === '--disable-web-ui') {
+      disableWebUi = true
     }
     
     // --config
@@ -116,7 +135,7 @@ function parseArgs(): CliArgs {
     process.exit(1)
   }
   
-  return { mode, readonly, port, config, transport }
+  return { mode, readonly, port, webUiPort, disableWebUi, config, transport }
 }
 
 function printHelp(): void {
@@ -132,7 +151,9 @@ Transport:
 
 Options:
   --readonly, -r        Disable write tools (read-only mode)
-  --port, -p <port>     HTTP server port (default: 3100, requires --http)
+  --port, -p <port>     HTTP server port (default: 38291, requires --http)
+  --web-ui-port <port>  Web UI port in stdio mode (default: 38291)
+  --disable-web-ui     Disable Web UI (default: enabled in stdio mode)
   --mode, -m <mode>     Server mode (HTTP only, default: local-dev)
                         - local-dev: Dynamic config discovery via cwd parameter
                         - remote-server: Fixed config from config file
@@ -145,8 +166,8 @@ Examples:
   ocd-mcp --readonly
 
   # HTTP server mode
-  ocd-mcp --http --port 3100
-  ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
+  ocd-mcp --http --port 38291
+  ocd-mcp --http --port 38291 --mode remote-server --config /path/to/config.json
 
 Cursor / Claude Desktop Configuration:
   {
@@ -173,43 +194,77 @@ async function main() {
   }
   
   if (args.transport === 'stdio') {
-    // stdio モード（Cursor / Claude Desktop 用）
-    await startStdioServer(serverMode)
+    // stdio モード（Cursor / Claude Desktop 用）+ オプションで Web UI
+    await startStdioServer(serverMode, {
+      webUiPort: args.webUiPort,
+      disableWebUi: args.disableWebUi,
+    })
   } else {
     // HTTP サーバーモード
     console.error(`[OCD-MCP] Starting HTTP server...`)
     console.error(`[OCD-MCP] Mode: ${serverMode.type}`)
     console.error(`[OCD-MCP] Readonly: ${serverMode.readonly}`)
-    await startHttpServer(args.port, args.config, serverMode)
+    await startHttpServer(args.port, args.config, serverMode, !args.disableWebUi)
   }
+}
+
+/** stdio 起動時の Web UI オプション */
+interface StdioWebUiOptions {
+  webUiPort: number
+  disableWebUi: boolean
 }
 
 /**
  * stdio サーバー起動（local-dev モード）
+ * --disable-web-ui でなければ Web UI 用 HTTP サーバーも並行起動
  */
-async function startStdioServer(serverMode: ServerMode): Promise<void> {
+async function startStdioServer(serverMode: ServerMode, webUiOptions: StdioWebUiOptions): Promise<void> {
   const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js')
   const { createLocalDevMcpServer } = await import('./mcp-server.js')
   
-  const server = await createLocalDevMcpServer(serverMode)
+  let webUiServer: InstanceType<typeof import('./http/WebUiServer.js').WebUiServer> | null = null
   
+  if (!webUiOptions.disableWebUi) {
+    const { WebUiServer } = await import('./http/WebUiServer.js')
+    webUiServer = new WebUiServer({
+      port: webUiOptions.webUiPort,
+      serverMode,
+    })
+    await webUiServer.start()
+  }
+  
+  const server = await createLocalDevMcpServer(serverMode)
   const transport = new StdioServerTransport()
   await server.connect(transport)
   
   // stderr にログ出力（stdout は MCP 通信に使用）
   console.error(`[OCD-MCP] stdio server started (local-dev mode, readonly: ${serverMode.readonly})`)
+  if (!webUiOptions.disableWebUi) {
+    console.error(`[OCD-MCP] Web UI: http://localhost:${webUiOptions.webUiPort}/viewer`)
+  }
+  
+  // Graceful shutdown で Web UI サーバーも停止
+  const shutdown = async () => {
+    if (webUiServer) {
+      await webUiServer.stop()
+    }
+    process.exit(0)
+  }
+  process.on('SIGINT', shutdown)
+  process.on('SIGTERM', shutdown)
 }
 
 /**
  * HTTP サーバー起動
  */
-async function startHttpServer(port: number, configPath: string | undefined, serverMode: ServerMode): Promise<void> {
+async function startHttpServer(port: number, configPath: string | undefined, serverMode: ServerMode, enableWebUi: boolean): Promise<void> {
   const { startHttpMcpServer } = await import('./http/HttpMcpServer.js')
   
   await startHttpMcpServer({
     port,
     configPath,
-    serverMode
+    serverMode,
+    enableWebUi,
   })
   
   console.error(`[OCD-MCP] HTTP server started on port ${port}`)

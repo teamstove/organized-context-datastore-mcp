@@ -12,6 +12,9 @@
 
 import express, { type Express, type Request, type Response, type NextFunction } from 'express'
 import cors from 'cors'
+import path from 'path'
+import fs from 'fs'
+import { fileURLToPath } from 'url'
 import { ProjectRegistry, type HttpServerConfig, type ProjectConfig } from './ProjectRegistry.js'
 import { createMcpRoutes, createLocalDevMcpRoutes } from './routes/mcpRoutes.js'
 import { createRestRoutes } from './routes/restRoutes.js'
@@ -254,6 +257,9 @@ export interface HttpMcpServerOptions {
   
   /** サーバーモード */
   serverMode: ServerMode
+  
+  /** Web UI を有効化 (local-dev モード時、デフォルト: true) */
+  enableWebUi?: boolean
 }
 
 /**
@@ -263,9 +269,11 @@ class LocalDevHttpServer {
   private app: Express
   private server: ReturnType<Express['listen']> | null = null
   private serverMode: ServerMode
+  private enableWebUi: boolean
   
-  constructor(serverMode: ServerMode) {
+  constructor(serverMode: ServerMode, enableWebUi: boolean = true) {
     this.serverMode = serverMode
+    this.enableWebUi = enableWebUi
     this.app = express()
     
     this.setupMiddleware()
@@ -326,6 +334,20 @@ class LocalDevHttpServer {
     const restRoutes = createRestRoutes(this.serverMode)
     this.app.use('/api/ocd', restRoutes)
     
+    // Web UI (オプション)
+    if (this.enableWebUi) {
+      const __dirname = path.dirname(fileURLToPath(import.meta.url))
+      const packageRoot = path.resolve(__dirname, '../..')
+      const webUiDistPath = path.join(packageRoot, 'web-ui', 'dist')
+      const indexHtmlPath = path.join(webUiDistPath, 'index.html')
+      if (fs.existsSync(indexHtmlPath)) {
+        this.app.use('/viewer', express.static(webUiDistPath, { index: false }))
+        this.app.get(/^\/viewer\/?/, (req: Request, res: Response) => {
+          res.sendFile(path.join(webUiDistPath, 'index.html'))
+        })
+      }
+    }
+    
     // エラーハンドラー
     this.app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
       console.error(`[HTTP] エラー:`, err)
@@ -383,11 +405,11 @@ class LocalDevHttpServer {
  * CLI から呼び出される
  */
 export async function startHttpMcpServer(options: HttpMcpServerOptions): Promise<void> {
-  const { port, configPath, serverMode } = options
+  const { port, configPath, serverMode, enableWebUi = true } = options
   
   if (serverMode.type === 'local-dev') {
     // local-dev モード: cwd ベースの動的設定解決
-    const server = new LocalDevHttpServer(serverMode)
+    const server = new LocalDevHttpServer(serverMode, enableWebUi)
     await server.start(port)
     
     // Graceful shutdown
