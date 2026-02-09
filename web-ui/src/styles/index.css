@@ -1,0 +1,126 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --primary: 221.2 83.2% 53.3%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222.2 47.4% 11.2%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 221.2 83.2% 53.3%;
+    --radius: 0.5rem;
+
+    /* コードブロック用（Light mode でも暗い背景をキープ） */
+    /* GitHub Dark テーマ (#0d1117) に合わせた色 */
+    --code-bg: 215 28% 7%;
+    --code-text: 210 40% 90%;
+    --code-inline-bg: 215 28% 17%;
+  }
+
+  .dark {
+    --background: 222.2 84% 4.9%;
+    --foreground: 210 40% 98%;
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 217.2 91.2% 59.8%;
+    --primary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 217.2 32.6% 17.5%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217.2 32.6% 17.5%;
+    --muted-foreground: 215 20.2% 65.1%;
+    --accent: 217.2 32.6% 17.5%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 224.3 76.3% 48%;
+
+    /* コードブロック用（Dark mode でも同じ暗い背景） */
+    --code-bg: 215 28% 7%;
+    --code-text: 210 40% 90%;
+    --code-inline-bg: 217.2 32.6% 17.5%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* スクロールバーのスタイル */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-muted;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-muted-foreground/30 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/50;
+}
+
+/* Markdown コンテンツ用スタイル */
+.markdown-content {
+  @apply prose prose-sm dark:prose-invert max-w-none;
+}
+
+/* コードブロック（pre）は Light/Dark 両方で暗い背景をキープ */
+.markdown-content pre {
+  @apply p-4 rounded-lg overflow-x-auto;
+  background-color: hsl(var(--code-bg));
+  color: hsl(var(--code-text));
+}
+
+/* インラインコードは Light mode では少し明るめの暗い色 */
+.markdown-content code {
+  @apply px-1.5 py-0.5 rounded text-sm font-mono;
+  background-color: hsl(var(--code-inline-bg));
+  color: hsl(var(--code-text));
+}
+
+/* pre 内の code は背景色を継承 */
+.markdown-content pre code {
+  @apply bg-transparent p-0;
+  color: inherit;
+}
+
+/* ツリービュー用スタイル */
+.tree-node {
+  @apply transition-colors duration-150;
+}
+
+.tree-node:hover {
+  @apply bg-accent;
+}
+
+.tree-node.selected {
+  @apply bg-primary/10 text-primary;
+}
