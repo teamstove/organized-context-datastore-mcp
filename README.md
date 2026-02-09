@@ -1,13 +1,43 @@
-# O.C.D. - Organized Context Datastore (MCP)
+# OCD - Organized Context Datastore (MCP)
 
-階層構造を持つコンテキストを LLM と人間が共同で読み書きできる MCP サーバー。
+階層構造を持つコンテキストを **LLM と人間** が共同で読み書きできる MCP サーバー。
 
-## 🚀 クイックスタート
+---
 
-### stdio モード（Cursor / Claude Desktop 用）
+## なぜ OCD か — UX の考え方
+
+OCD は **LLM UX** と **Human UX** の両方を最適化しています。
+
+### LLM UX — AI にとっての使いやすさ
+
+| 課題 | OCD のアプローチ |
+|------|---------------------|
+| **コンテキスト消失** | プロジェクト知識を永続ストアに保存。セッションをまたいで一貫したコンテキストを維持 |
+| **Token 消費の非効率** | `ocd_get_context_tree` で必要なノードだけ取得。`tree-text` 形式で Token 効率を最大化 |
+| **知識の散逸** | 階層構造とパターン検索で、関連するコンテキストをまとめて取得 |
+| **整合性** | 単一のデータソース。LLM と人間が同じ Markdown を参照・編集 |
+
+LLM は MCP ツール経由で、検索・取得・更新・コミットを自然なワークフローで行えます。
+
+### Human UX — 人間にとっての使いやすさ
+
+| ニーズ | OCD のアプローチ |
+|--------|---------------------|
+| **可読性** | Markdown ベース。普段使いのエディタや GitHub でそのまま編集可能 |
+| **可視化** | Web UI (`/viewer`) でツリー表示・検索・編集。ブラウザからすぐ確認 |
+| **履歴管理** | Git 連携。変更の追跡とレビューが可能 |
+| **協調** | LLM が書いたコンテキストを人間がレビュー・修正。逆も同様 |
+
+stdio モードでは **Cursor から stdio**、**人間はブラウザ** で同時にアクセスでき、ワンライナー設定で両方に対応します。
+
+---
+
+## クイックスタート
+
+### ワンライナー（stdio + Web UI デフォルト ON）
 
 ```bash
-# デフォルト
+# Cursor から stdio 接続 + 人間はブラウザで http://localhost:38291/viewer
 npx github:teamstove/organized-context-datastore-mcp
 
 # readonly モード
@@ -17,27 +47,62 @@ npx github:teamstove/organized-context-datastore-mcp --readonly
 ### HTTP サーバーモード
 
 ```bash
-# Local Dev モード
-npx github:teamstove/organized-context-datastore-mcp --http --port 3100
+# Local Dev モード（Web UI 付き）
+npx github:teamstove/organized-context-datastore-mcp --http --port 38291
 
 # Remote Server モード
 npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server --config ./config.json
 ```
 
-## 🔧 起動オプション
+---
+
+## 起動オプション
 
 | オプション | 説明 |
 |-----------|------|
-| (なし) | stdio モード（デフォルト、Cursor/Claude Desktop 用） |
+| (なし) | stdio モード（デフォルト）+ Web UI を port 38291 で起動 |
 | `--http` | HTTP サーバーモード |
 | `--readonly` | 書き込みツールを無効化 |
-| `--port <port>` | HTTP ポート番号（デフォルト: 3100） |
+| `--port <port>` | HTTP ポート番号（デフォルト: 38291） |
+| `--web-ui-port <port>` | stdio モード時の Web UI ポート（デフォルト: 38291） |
+| `--disable-web-ui` | Web UI を無効化 |
 | `--mode <mode>` | HTTP のみ: local-dev / remote-server |
 | `--config <path>` | remote-server モード用の設定ファイル |
 
-## 📋 Cursor / IDE 設定
+---
 
-### stdio モード（推奨）
+## Cursor / IDE 設定
+
+### ワンライナー（stdio + Web UI）
+
+```json
+{
+  "mcpServers": {
+    "ocd-mcp": {
+      "command": "npx",
+      "args": [
+        "--package", "github:teamstove/organized-context-datastore-mcp",
+        "tsx", "src/cli.ts"
+      ]
+    }
+  }
+}
+```
+
+- **Cursor** → stdio で MCP 接続
+- **人間** → ブラウザで `http://localhost:38291/viewer`
+
+### stdio のみ（Web UI 無効）
+
+```json
+"args": [
+  "--package", "github:teamstove/organized-context-datastore-mcp",
+  "tsx", "src/cli.ts",
+  "--disable-web-ui"
+]
+```
+
+### bin 経由（パッケージ取得後）
 
 ```json
 {
@@ -50,157 +115,75 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 }
 ```
 
-### stdio モード（ローカル開発: tsx でソース直接実行）
-
-`npx github:...` で Permission denied や ENOTEMPTY が出る場合、またはリポジトリをクローンして開発している場合は、**tsx で TypeScript ソースを直接実行**する設定が確実です。ビルド不要で、npx のキャッシュや .bin の実行権に依存しません。
-
-**手順**
-
-1. **リポジトリをクローン**（未クローンの場合）
-   ```bash
-   git clone https://github.com/teamstove/organized-context-datastore-mcp.git
-   cd organized-context-datastore-mcp
-   ```
-
-2. **依存関係をインストール**
-   ```bash
-   pnpm install
-   # または
-   npm install
-   ```
-
-3. **Cursor の MCP 設定に以下を追加**  
-   `cli.ts` へのパスは、自分の環境のリポジトリ配置に合わせて書き換えてください。
-
-   ```json
-   {
-     "mcpServers": {
-       "organized-context-datastore": {
-         "command": "npx",
-         "args": [
-           "tsx",
-           "/path/to/organized-context-datastore-mcp/src/cli.ts"
-         ]
-       }
-     }
-   }
-   ```
-
-   **例（リポジトリが STOVE_AI_CORE_ENGINE 配下にある場合）**
-   ```json
-   "organized-context-datastore": {
-     "command": "npx",
-     "args": [
-       "tsx",
-       "/Applications/MAMP/htdocs/TAIRIKUT/TAIRIKUT_CORE/CORE/COREFW_AI_WORKFLOWS/STOVE_AI_CORE_ENGINE/packages/apps/organized-context-datastore-mcp/src/cli.ts"
-     ]
-   }
-   ```
-
-   - オプション（`--readonly` など）を付けたい場合は、`args` の末尾に追加します。  
-     例: `"args": ["tsx", "/path/to/.../src/cli.ts", "--readonly"]`
-
 ### HTTP モード
+
+```bash
+# ターミナルで起動
+npx github:teamstove/organized-context-datastore-mcp --http --port 38291
+```
 
 ```json
 {
   "mcpServers": {
     "ocd-mcp": {
-      "url": "http://localhost:3100/api/mcp"
+      "url": "http://localhost:38291/api/mcp"
     }
   }
 }
 ```
 
-※ HTTP モードは別途サーバーを起動しておく必要があります。
+`http://localhost:38291/viewer` で Web UI にアクセス可能。
 
 ### Context Roots フィルタリング（HTTP モード）
-
-特定の Context Roots のみを対象にしたい場合：
 
 ```json
 {
   "mcpServers": {
     "ocd-pj-alpha": {
-      "url": "http://localhost:3100/api/mcp?roots=project-alpha,core-docs"
+      "url": "http://localhost:38291/api/mcp?roots=project-alpha,core-docs"
     },
     "ocd-pj-beta-readonly": {
-      "url": "http://localhost:3100/api/mcp?roots=project-beta,shared&readonly=shared"
+      "url": "http://localhost:38291/api/mcp?roots=project-beta,shared&readonly=shared"
     }
   }
 }
 ```
 
-#### クエリパラメータ
-
 | パラメータ | 説明 | 例 |
 |-----------|------|-----|
 | `roots` | 含める Context Root IDs（カンマ区切り） | `?roots=A,B,C` |
 | `readonly` | readonly にする Context Root IDs | `?readonly=C` |
-| `config` | JSON 形式（URL エンコード） | `?config={"roots":["A"],...}` |
 
-## 📁 設定ファイル
+---
 
-### グローバル設定 (`~/.ocd/config.js`)
-
-全プロジェクトで共有する Context Roots：
-
-```javascript
-/**
- * グローバル設定（全 PJ で共有）
- */
-export default {
-  globalContextRoots: [
-    {
-      id: 'company-docs',
-      name: 'Company Documentation',
-      path: '/path/to/shared/docs',
-      readOnly: true
-    }
-  ]
-}
-```
+## 設定ファイル
 
 ### ローカル設定 (`.ocd.config.js`)
 
-プロジェクト固有の設定（cwd から上位に探索）：
+プロジェクトルートに配置。cwd から上位に自動探索されます。
 
 ```javascript
-/**
- * OCD-MCP 設定ファイル
- * 
- * contextRoots: Context Root の配列
- *   - path: string (必須)
- *   - name?: string
- *   - readOnly?: boolean
- *   - git?: 'auto-commit' | 'manual' | 'none'
- *   - ignorePatterns?: string[]
- *   - defaultExtension?: string
- * 
- * inheritGlobal?: boolean (デフォルト: true)
- */
 export default {
   contextRoots: [
     {
-      // プロジェクトのコンテキスト
       path: './organized-context',
       git: 'auto-commit'
     },
     {
-      // CORE Framework ドキュメント（読み取り専用）
       path: './CORE/docs',
       name: 'CORE Docs',
       readOnly: true
     }
   ],
-  
   inheritGlobal: true
 }
 ```
 
-### git 設定
+### グローバル設定 (`~/.ocd/config.js`)
 
-Context Root 毎に Git コミットの挙動を設定：
+全プロジェクトで共有する Context Roots を定義。
+
+### git 設定
 
 | 値 | 説明 |
 |----|------|
@@ -208,39 +191,9 @@ Context Root 毎に Git コミットの挙動を設定：
 | `'manual'` | `commit` ツールで明示的にコミット（**デフォルト**） |
 | `'none'` | Git を使用しない |
 
-### treeTextFormat 設定
+---
 
-Tree 表示のフォーマットを設定：
-
-```javascript
-export default {
-  contextRoots: [...],
-  treeTextFormat: '$path: $title'  // デフォルト
-}
-```
-
-使用可能な変数：
-| 変数 | 説明 |
-|------|------|
-| `$path` | 相対パス |
-| `$title` | タイトル |
-
-> **Note**: `readOnly: true` の Context Root は書き込みしないため `git` 設定は無視されます。
-
-## 📖 特徴
-
-- **Markdown ベース** - 人間が読み書きしやすいフォーマット
-- **階層構造** - ネストしたコンテキストノード
-- **LLM + 人間 協調** - 両者が同じデータストアを読み書き
-- **MCP プロトコル** - Cursor, Claude Desktop などから接続可能
-- **Git 連携** - 変更履歴の自動管理
-- **マルチプロジェクト** - 複数 PJ の同時利用をサポート
-- **動的設定探索** - cwd から `.ocd.config.json` を自動検出
-- **Context Roots フィルタ** - URL パラメータで対象を絞り込み
-
-## 🔧 MCP ツール一覧
-
-全ツールに `ocd_` プレフィックス（Organized Context Datastore）が付いています。
+## MCP ツール一覧
 
 | ツール | 説明 |
 |--------|------|
@@ -251,13 +204,15 @@ export default {
 | `ocd_mutate_context` | コンテキストを変更（create/update/delete/move） |
 | `ocd_commit` | 変更をコミット（git: 'manual' モード用） |
 
-## 📁 ディレクトリ構造
+---
+
+## ディレクトリ構造例
 
 ```
 my-context-store/
-├── .ocd.config.json      # ローカル設定ファイル
+├── .ocd.config.js
 ├── project-a/
-│   ├── index.md          # プロジェクト概要
+│   ├── index.md
 │   ├── features/
 │   │   ├── feature-1.md
 │   │   └── feature-2.md
@@ -267,7 +222,9 @@ my-context-store/
     └── ...
 ```
 
-## 📝 Markdown フォーマット
+---
+
+## Markdown フォーマット
 
 ```markdown
 ---
@@ -283,61 +240,28 @@ priority: high
 ユーザー認証機能の実装について...
 ```
 
-### カスタム属性 (attrs)
+`title` 以外の frontmatter フィールドは `attrs` として扱われます。
 
-frontmatter の `title` 以外のフィールドはすべて `attrs` として扱われます。
-任意のキー・値を自由に設定できます。
-
-```markdown
 ---
-title: ドキュメントタイトル
-status: published
-priority: high
-author: "@user"
-due: 2026-02-01
----
-```
 
-ツール引数/レスポンスでの扱い：
-```json
-{
-  "path": "docs/overview",
-  "title": "ドキュメントタイトル",
-  "attrs": {
-    "status": "published",
-    "priority": "high",
-    "author": "@user",
-    "due": "2026-02-01"
-  }
-}
-```
-
-## 📦 インストール
+## インストール
 
 ```bash
-# npm
-npm install @stove-ai/organized-context-datastore-mcp
-
-# または GitHub から
 git clone https://github.com/teamstove/organized-context-datastore-mcp.git
 cd organized-context-datastore-mcp
 npm install
-npm run build
 ```
 
-## 🛠 開発
+Web UI は初回起動時に自動ビルドされます。手動ビルドは `npm run build:web-ui`。
 
-```bash
-# Local Dev モードで起動
-npm run dev -- --mode local-dev --port 3100
+---
 
-# テスト実行
-npm test
+## 開発者向け
 
-# ビルド
-npm run build
-```
+ローカル開発・テスト・ビルドの手順は [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) を参照してください。
 
-## 📄 ライセンス
+---
+
+## ライセンス
 
 MIT
