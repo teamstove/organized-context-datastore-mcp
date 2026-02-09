@@ -415,12 +415,13 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
       try {
         const typedArgs = args as { cwd?: string; operations: Parameters<KnowledgeGraphService['mutateContext']>[0] }
         const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
+        const start = performance.now()
         const result = await service.mutateContext(typedArgs.operations)
-        
+        const took = (performance.now() - start) / 1000
         return {
           content: [{
             type: 'text' as const,
-            text: `Success: ${result.success}, Errors: ${result.errors}\n\n${JSON.stringify(result.results, null, 2)}`
+            text: `Took: ${took.toFixed(2)}s\nSuccess: ${result.success}, Errors: ${result.errors}\n\n${JSON.stringify(result.results, null, 2)}`
           }]
         }
       } catch (error) {

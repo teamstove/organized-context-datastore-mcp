@@ -400,10 +400,14 @@ async function executeToolCall(
         args.scope as string[] | undefined
       )
     
-    case 'mutate_context':
-      return await service.mutateContext(
+    case 'mutate_context': {
+      const start = performance.now()
+      const result = await service.mutateContext(
         args.operations as Parameters<typeof service.mutateContext>[0]
       )
+      const took = (performance.now() - start) / 1000
+      return { ...result, took }
+    }
     
     case 'commit':
       return await service.commit(
@@ -426,11 +430,12 @@ async function executeToolCall(
 const serviceCache = new Map<string, { service: KnowledgeGraphService, createdAt: Date }>()
 
 /**
- * キャッシュのクリーンアップ (30分経過したエントリを削除)
+ * キャッシュのクリーンアップ (5分経過したエントリを削除)
+ * 設定ファイル変更の即時反映を優先するため 30分 → 5分 に短縮
  */
 function cleanupServiceCache(): void {
   const now = Date.now()
-  const maxAge = 30 * 60 * 1000 // 30分
+  const maxAge = 5 * 60 * 1000 // 5分
   
   for (const [cwd, entry] of serviceCache) {
     if (now - entry.createdAt.getTime() > maxAge) {

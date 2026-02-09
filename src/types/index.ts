@@ -520,6 +520,9 @@ export interface MutationResult {
   
   /** 各操作の結果 */
   results: MutationOperationResult[]
+  
+  /** 調査用: 処理にかかった秒数 (tool response のみ) */
+  took?: number
 }
 
 /**

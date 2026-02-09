@@ -21,11 +21,12 @@ import { KnowledgeGraphService as KGServiceClass } from '../../KnowledgeGraphSer
 const serviceCache = new Map<string, { service: KnowledgeGraphService; createdAt: Date }>()
 
 /**
- * キャッシュのクリーンアップ (30分経過したエントリを削除)
+ * キャッシュのクリーンアップ (5分経過したエントリを削除)
+ * 設定ファイル変更の即時反映を優先するため 30分 → 5分 に短縮
  */
 function cleanupServiceCache(): void {
   const now = Date.now()
-  const maxAge = 30 * 60 * 1000 // 30分
+  const maxAge = 5 * 60 * 1000 // 5分
 
   for (const [cwd, entry] of serviceCache) {
     if (now - entry.createdAt.getTime() > maxAge) {
