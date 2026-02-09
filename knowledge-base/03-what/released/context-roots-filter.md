@@ -57,13 +57,13 @@ POST /api/mcp?config={"roots":["project-alpha","shared"],"readonly":["shared"]}
 {
   "mcpServers": {
     "ocd-pj-alpha": {
-      "url": "http://localhost:3100/api/mcp?roots=project-alpha,core-docs"
+      "url": "http://localhost:38291/api/mcp?roots=project-alpha,core-docs"
     },
     "ocd-pj-beta": {
-      "url": "http://localhost:3100/api/mcp?roots=project-beta,shared&readonly=shared"
+      "url": "http://localhost:38291/api/mcp?roots=project-beta,shared&readonly=shared"
     },
     "ocd-all-readonly": {
-      "url": "http://localhost:3100/api/mcp?readonly=project-alpha,project-beta,shared"
+      "url": "http://localhost:38291/api/mcp?readonly=project-alpha,project-beta,shared"
     }
   }
 }

@@ -18,7 +18,7 @@ OCD-MCP サーバーは複数の起動モードをサポート。
 | トランスポート | 用途 | コマンド |
 |---------------|------|----------|
 | **stdio** | Cursor / Claude Desktop 用 | `ocd-mcp` |
-| **HTTP** | サーバー常駐 | `ocd-mcp --http --port 3100` |
+| **HTTP** | サーバー常駐 | `ocd-mcp --http --port 38291` |
 
 ## 起動コマンド
 
@@ -28,8 +28,8 @@ ocd-mcp
 ocd-mcp --readonly
 
 # HTTP モード
-ocd-mcp --http --port 3100
-ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
+ocd-mcp --http --port 38291
+ocd-mcp --http --port 38291 --mode remote-server --config /path/to/config.json
 ```
 
 ## stdio モード（Cursor / Claude Desktop 用）
@@ -58,7 +58,7 @@ ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
 ### local-dev モード（デフォルト）
 
 ```bash
-ocd-mcp --http --port 3100
+ocd-mcp --http --port 38291
 ```
 
 - 各リクエストに `cwd` パラメータを含める
@@ -68,7 +68,7 @@ ocd-mcp --http --port 3100
 ### remote-server モード
 
 ```bash
-ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
+ocd-mcp --http --port 38291 --mode remote-server --config /path/to/config.json
 ```
 
 - 設定ファイルで Context Roots を固定
@@ -79,7 +79,7 @@ ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
 
 ```json
 {
-  "port": 3100,
+  "port": 38291,
   "projects": [
     {
       "id": "main",
@@ -103,7 +103,7 @@ ocd-mcp --http --port 3100 --mode remote-server --config /path/to/config.json
 ocd-mcp --readonly
 
 # HTTP
-ocd-mcp --http --port 3100 --readonly
+ocd-mcp --http --port 38291 --readonly
 ```
 
 ## 関連

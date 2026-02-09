@@ -36,7 +36,7 @@ tags:
 ocd-mcp
 
 # HTTP モード
-ocd-mcp --http --port 3100
+ocd-mcp --http --port 38291
 ```
 
 ### 2. stdio は自動的に local-dev モード

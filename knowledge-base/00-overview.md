@@ -17,7 +17,7 @@ LLM向けに最適化されたMarkdownベースのコンテキスト管理シス
 npx organized-context-datastore-mcp
 
 # HTTP モード
-npx organized-context-datastore-mcp --http --port 3100
+npx organized-context-datastore-mcp --http --port 38291
 ```
 
 ### MCP ツール

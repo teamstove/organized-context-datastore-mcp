@@ -9,7 +9,7 @@
  *   ocd-mcp
  * 
  *   # HTTP モード
- *   ocd-mcp --http --port 3100
+ *   ocd-mcp --http --port 38291
  */
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
