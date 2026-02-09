@@ -1,0 +1,46 @@
+---
+description: このリポジトリの背景・概要・目的（OCD MCP プロジェクトコンテキスト）
+alwaysApply: true
+---
+
+# このリポジトリについて — Organized Context Datastore (MCP)
+
+## プロジェクト概要
+
+**OCD (Organized Context Datastore)** は、階層構造を持つコンテキストを **LLM と人間** が共同で読み書きできる **MCP (Model Context Protocol) サーバー** です。
+
+- **正式名**: organized-context-datastore-mcp（standalone パッケージ）
+- **種別**: MCP サーバーアプリ（stdio / HTTP 対応）
+- **主要技術**: TypeScript, Node.js, Express, Vue3 (Web UI), Markdown + frontmatter, Git / PostgreSQL ストレージ
+
+## 背景・目的
+
+### 解決したい課題
+
+| 対象 | 課題 | OCD のアプローチ |
+|------|------|-------------------|
+| **LLM** | コンテキスト消失・Token 消費の非効率・知識の散逸 | 永続ストア + 階層・パターン検索 + `tree-text` で必要なノードだけ取得 |
+| **人間** | 可読性・可視化・履歴・LLM との協調 | Markdown ベース、Web UI (`/viewer`)、Git 連携、同一データソースで共同編集 |
+
+### ビジョン
+
+LLM が「プロジェクト知識」に自然言語でアクセスし、セッションをまたいで一貫したコンテキストを維持できるようにする。同時に、人間が普段使いのエディタや GitHub で同じ Markdown を編集・レビューできるようにする。
+
+## 主要な提供物
+
+- **MCP ツール**: `ocd_list_context_roots`, `ocd_get_contexts`, `ocd_get_context_tree`, `ocd_search_contexts`, `ocd_mutate_context`, `ocd_commit`
+- **ストレージ**: ファイル + Git（`FileGitStore`）、または PostgreSQL（`PostgresStore`）。Context Root ごとに設定可能。
+- **設定**: プロジェクトルートの `.ocd.config.js`、グローバルは `~/.ocd/config.js`。`contextRoots` でパス・git モード・readOnly を指定。
+- **Web UI**: `/viewer` でツリー表示・検索・編集。stdio モードでもデフォルトで port 38291 で起動可能。
+
+## 開発時の参照先
+
+- **README.md**: クイックスタート・起動オプション・Cursor 設定・MCP ツール一覧・Markdown フォーマット
+- **docs/DEVELOPMENT.md**: ローカル開発・テスト・ビルド手順
+- **knowledge-base/**: なぜ・どうやって・何があるか・ADR・将来検討（00-overview, 01-why, 02-how, 03-what, 90-decisions, 99-future）
+- **src/**: MCP サーバー、CLI、ストレージ、HTTP/Web UI、ツール実装
+
+## 注意事項
+
+- 後方互換性は不要という方針のため、破壊的変更時は積極的に旧 API を削除してよい。
+- 実装・調査時は推測せず、ログや実際のリクエスト内容で検証する。
