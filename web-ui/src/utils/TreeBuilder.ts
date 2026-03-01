@@ -107,7 +107,17 @@ function createNodeMap(
  * 中間ディレクトリの仮想ノードを追加
  *
  * パスに含まれるが、実際のノードとして存在しないディレクトリを
- * 仮想ノードとして作成
+ * 仮想ノードとして作成。
+ *
+ * 【重要】ファイルとディレクトリの同名衝突を処理:
+ * 例: plans.md（ファイル）と plans/（ディレクトリ）が同時に存在する場合、
+ * ファイルノードを仮想ディレクトリの子に「退避」し、
+ * 仮想ディレクトリをマップに置き換える。
+ * これにより、UIで以下のように表示される:
+ *   📁 plans (仮想ディレクトリ)
+ *     📄 plans (退避されたファイル, plans.md)
+ *     📁 active
+ *     📄 xxx
  */
 function addVirtualNodes(
   nodeMap: Map<string, TreeNode>,
@@ -127,8 +137,8 @@ function addVirtualNodes(
         continue
       }
 
-      // まだ存在しない場合は仮想ノードを作成
       if (!nodeMap.has(intermediatePath)) {
+        // 通常ケース: 仮想ディレクトリノードを新規作成
         const dirName = pathParts[i - 1]
         nodeMap.set(intermediatePath, {
           path: intermediatePath,
@@ -139,6 +149,41 @@ function addVirtualNodes(
           isVirtual: true,
           children: [],
         })
+      } else {
+        // パスが既に存在する — ファイルノードとディレクトリの衝突チェック
+        const existing = nodeMap.get(intermediatePath)!
+        if (!existing.isVirtual) {
+          // 実ファイルがこのパスを占有しているが、ディレクトリとしても必要
+          // → ファイルを「退避」して仮想ディレクトリに置き換え、
+          //   ファイルはその子ノードとして配置する
+          const dirName = pathParts[i - 1]
+
+          // 仮想ディレクトリを作成（既存ノードの子は引き継ぐ）
+          const virtualDir: TreeNode = {
+            path: intermediatePath,
+            title: dirName,
+            attrs: {},
+            childCount: 0,
+            hasChildren: true,
+            isVirtual: true,
+            children: [...existing.children],
+          }
+
+          // 退避するファイルノード:
+          // - children をリセット（実際のファイルには子がない）
+          // - hasChildren / childCount をリセット
+          //   （バックエンドが設定した値はディレクトリ子の数であり不正確）
+          const displacedFile: TreeNode = {
+            ...existing,
+            children: [],
+            hasChildren: false,
+            childCount: 0,
+          }
+          virtualDir.children.push(displacedFile)
+
+          // マップ上のエントリを仮想ディレクトリで置き換え
+          nodeMap.set(intermediatePath, virtualDir)
+        }
       }
     }
   }

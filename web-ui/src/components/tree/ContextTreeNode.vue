@@ -40,7 +40,11 @@ const uiService = inject(uiServiceKey) as UIService
 
 const isExpanded = computed(() => contextService.isExpanded(props.node.path))
 // selectedPath を使用（コンテンツ読み込み前でも選択状態を反映）
-const isSelected = computed(() => contextService.state.selectedPath === props.node.path)
+// 仮想ノード（ディレクトリ）は選択対象外:
+// 同名ファイルが退避されて子になっている場合、仮想ディレクトリまでハイライトされるのを防ぐ
+const isSelected = computed(() =>
+  !props.node.isVirtual && contextService.state.selectedPath === props.node.path
+)
 const hasChildren = computed(() => 
   props.node.hasChildren || 
   props.node.childCount > 0 || 
