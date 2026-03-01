@@ -8,6 +8,15 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { KnowledgeGraphService } from '../KnowledgeGraphService.js'
 import type { ServerMode } from '../types/index.js'
+import type {
+  ListContextRootsResponse,
+  GetContextsResponse,
+  GetContextTreeResponse,
+  SearchContextsResponse,
+  MutateContextResponse,
+  CommitResponse,
+  ToolErrorResponse,
+} from './ToolResponseTypes.js'
 
 // =============================================================================
 // MCP Response Builders
@@ -20,14 +29,17 @@ import type { ServerMode } from '../types/index.js'
  * デュアル形式でレスポンスを返す。
  * - content[0].text: JSON.stringify(data) — LLM がテキストとして読む用
  * - structuredContent: data — プログラマティックなクライアント用
+ * 
+ * ジェネリクスにより各ツールのレスポンス型を呼び出し時に指定可能。
  */
-function buildResult(data: Record<string, unknown>) {
+function buildResult<T extends object>(data: T) {
   return {
     content: [{
       type: 'text' as const,
       text: JSON.stringify(data, null, 2)
     }],
-    structuredContent: data
+    // TypeScript の interface は暗黙の index signature を持たないため二段キャストが必要
+    structuredContent: data as unknown as Record<string, unknown>
   }
 }
 
@@ -38,14 +50,8 @@ function buildResult(data: Record<string, unknown>) {
  * isError: true により SDK の outputSchema 検証はスキップされる。
  */
 function buildErrorResult(error: Error) {
-  return {
-    content: [{
-      type: 'text' as const,
-      text: JSON.stringify({ error: error.message }, null, 2)
-    }],
-    structuredContent: { error: error.message },
-    isError: true as const
-  }
+  const body: ToolErrorResponse = { error: error.message }
+  return { ...buildResult(body), isError: true as const }
 }
 
 // =============================================================================
@@ -172,7 +178,7 @@ function registerReadTools(
       try {
         const service = await resolveService(isLocalDev ? (args as { cwd: string }).cwd : undefined)
         const roots = await service.listContextRoots()
-        return buildResult({ roots })
+        return buildResult<ListContextRootsResponse>({ roots })
       } catch (error) {
         return buildErrorResult(error as Error)
       }
@@ -216,7 +222,7 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
           filter: typedArgs.filter,
           includeContent: typedArgs.includeContent
         })
-        return buildResult({ contexts, count: contexts.length })
+        return buildResult<GetContextsResponse>({ contexts, count: contexts.length })
       } catch (error) {
         return buildErrorResult(error as Error)
       }
@@ -281,7 +287,7 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           treeTextFormat: typedArgs.treeTextFormat,
           maxNodes: typedArgs.maxNodes
         })
-        return buildResult(result as unknown as Record<string, unknown>)
+        return buildResult<GetContextTreeResponse>(result)
       } catch (error) {
         return buildErrorResult(error as Error)
       }
@@ -311,7 +317,7 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           typedArgs.query,
           typedArgs.scope
         )
-        return buildResult({ results, count: results.length })
+        return buildResult<SearchContextsResponse>({ results, count: results.length })
       } catch (error) {
         return buildErrorResult(error as Error)
       }
@@ -398,7 +404,7 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
         const start = performance.now()
         const result = await service.mutateContext(typedArgs.operations)
         const took = (performance.now() - start) / 1000
-        return buildResult({ ...result, took: parseFloat(took.toFixed(2)) })
+        return buildResult<MutateContextResponse>({ ...result, took: parseFloat(took.toFixed(2)) })
       } catch (error) {
         return buildErrorResult(error as Error)
       }
@@ -425,7 +431,7 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
         const typedArgs = args as { cwd?: string; message: string; paths?: string[] }
         const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
         const hash = await service.commit(typedArgs.message, typedArgs.paths)
-        return buildResult({ hash, message: typedArgs.message })
+        return buildResult<CommitResponse>({ hash, message: typedArgs.message })
       } catch (error) {
         return buildErrorResult(error as Error)
       }
