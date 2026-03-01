@@ -242,6 +242,9 @@ export class ConfigLoader {
   
   /**
    * index.md から Context Root 情報を抽出
+   * 
+   * gray-matter でパースすることで、YAML の特殊文字（: " ' 等）を含む
+   * title/summary も正しく読み取れる
    */
   private async extractRootInfo(dirPath: string, dirName: string): Promise<ContextRootConfig> {
     const indexPath = path.join(dirPath, 'index.md')
@@ -249,24 +252,18 @@ export class ConfigLoader {
     try {
       const content = await fs.readFile(indexPath, 'utf-8')
       
-      // Frontmatter から title と summary を抽出
-      const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---/)
+      // gray-matter で安全にパース（独自 regex ではなく）
+      const { extractFrontmatterValues } = await import('../parser/frontmatterUtils.js')
+      const { title, summary } = extractFrontmatterValues(content)
       
-      if (frontmatterMatch) {
-        const frontmatter = frontmatterMatch[1]
-        
-        const titleMatch = frontmatter.match(/^title:\s*(.+)$/m)
-        const summaryMatch = frontmatter.match(/^summary:\s*(.+)$/m)
-        
-        return {
-          id: this.slugify(dirName),
-          name: titleMatch?.[1] ?? dirName,
-          path: dirName,
-          description: summaryMatch?.[1]
-        }
+      return {
+        id: this.slugify(dirName),
+        name: title ?? dirName,
+        path: dirName,
+        description: summary
       }
     } catch {
-      // ファイル読み込み失敗
+      // ファイル読み込み失敗 or モジュール読み込み失敗
     }
     
     return {

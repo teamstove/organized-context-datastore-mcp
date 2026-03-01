@@ -290,13 +290,17 @@ export function toContextNode(
   const { frontmatter, content, annotations, todos, sections, links } = parsed
   
   // タイトルを決定 (Frontmatter > 最初のH1 > ファイル名)
-  let title = frontmatter.title
+  // YAML 予約語対策: frontmatter.title が boolean/number/null に変換される場合があるため string に強制
+  const rawTitle = frontmatter.title
+  let title: string | undefined = typeof rawTitle === 'string'
+    ? rawTitle
+    : rawTitle != null ? String(rawTitle) : undefined
+  
   if (!title) {
     const h1 = sections.find(s => s.level === 1)
     title = h1?.title
   }
   if (!title) {
-    // パスからファイル名を抽出
     const parts = path.split('/')
     const filename = parts[parts.length - 1]
     title = filename.replace(/\.md$/, '')

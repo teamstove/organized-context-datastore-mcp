@@ -7,6 +7,7 @@
 
 import type { Knex } from 'knex'
 import knex from 'knex'
+import matter from 'gray-matter'
 import type { IKnowledgeStore } from './IKnowledgeStore.js'
 import { KnowledgeStoreError } from './IKnowledgeStore.js'
 import type { FileMetadata, VersionEntry } from '../types/index.js'
@@ -384,18 +385,16 @@ export class PostgresStore implements IKnowledgeStore {
   async mkdir(path: string): Promise<void> {
     const normalizedPath = this.normalizePath(path)
     
-    // ディレクトリを表すindex.mdが存在しなければ作成
     const indexPath = `${normalizedPath}/index`
     const exists = await this.exists(indexPath)
     
     if (!exists) {
-      const content = `---
-title: ${path.split('/').pop() || path}
-summary: ""
----
-
-# ${path.split('/').pop() || path}
-`
+      const title = path.split('/').pop() || path
+      // gray-matter を使って YAML 安全な frontmatter を生成
+      const content = matter.stringify(`\n# ${title}\n`, {
+        title,
+        summary: ''
+      })
       await this.write(indexPath, content)
     }
   }
@@ -491,8 +490,8 @@ summary: ""
       )
     }
     
-    // Markdown形式で返す
-    const frontmatter = {
+    // Markdown形式で返す（gray-matter で YAML 安全に生成）
+    const frontmatterData: Record<string, unknown> = {
       ...versionRecord.frontmatter,
       title: versionRecord.title,
       summary: versionRecord.summary,
@@ -500,7 +499,14 @@ summary: ""
       tags: versionRecord.tags
     }
     
-    return this.formatFrontmatter(frontmatter) + '\n\n' + (versionRecord.content || '')
+    // null/undefined を除去
+    for (const key of Object.keys(frontmatterData)) {
+      if (frontmatterData[key] === null || frontmatterData[key] === undefined) {
+        delete frontmatterData[key]
+      }
+    }
+    
+    return matter.stringify('\n' + (versionRecord.content || ''), frontmatterData)
   }
   
   // ==========================================================================
@@ -527,9 +533,12 @@ summary: ""
   
   /**
    * DBレコードをMarkdown形式に変換
+   * 
+   * gray-matter の stringify を使い、YAML 特殊文字（: " ' # など）を
+   * 安全にエスケープした frontmatter を生成する
    */
   private toMarkdown(record: ContextNodeRecord): string {
-    const frontmatter = {
+    const frontmatterData: Record<string, unknown> = {
       title: record.title,
       summary: record.summary || '',
       categories: record.categories || [],
@@ -537,55 +546,35 @@ summary: ""
       ...record.frontmatter
     }
     
-    return this.formatFrontmatter(frontmatter) + '\n\n' + (record.content || '')
-  }
-  
-  /**
-   * フロントマターをYAML形式に変換
-   */
-  private formatFrontmatter(data: Record<string, unknown>): string {
-    const lines = ['---']
-    
-    for (const [key, value] of Object.entries(data)) {
-      if (value === null || value === undefined) continue
-      
-      if (Array.isArray(value)) {
-        if (value.length === 0) {
-          lines.push(`${key}: []`)
-        } else {
-          lines.push(`${key}:`)
-          value.forEach(item => lines.push(`  - "${item}"`))
-        }
-      } else if (typeof value === 'string') {
-        lines.push(`${key}: "${value}"`)
-      } else {
-        lines.push(`${key}: ${JSON.stringify(value)}`)
+    // null/undefined を除去
+    for (const key of Object.keys(frontmatterData)) {
+      if (frontmatterData[key] === null || frontmatterData[key] === undefined) {
+        delete frontmatterData[key]
       }
     }
     
-    lines.push('---')
-    return lines.join('\n')
+    return matter.stringify('\n' + (record.content || ''), frontmatterData)
   }
   
   /**
    * MarkdownをパースしてDBレコードに変換
+   * 
+   * gray-matter を使い、YAML の特殊文字（: " ' # [] {} 等）や
+   * 予約語（null, true, false）を正しくパースする
    */
   private parseMarkdown(content: string, path: string): Partial<ContextNodeRecord> {
-    // フロントマターの抽出（簡易パーサー）
-    const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n/)
-    let frontmatter: Record<string, unknown> = {}
-    let bodyContent = content
+    const { data: frontmatter, content: bodyContent } = matter(content)
     
-    if (frontmatterMatch) {
-      frontmatter = this.parseFrontmatter(frontmatterMatch[1])
-      bodyContent = content.slice(frontmatterMatch[0].length)
-    }
+    // title が string でない場合の防御（YAML 予約語の型変換対策）
+    const rawTitle = frontmatter.title
+    const title = (typeof rawTitle === 'string' ? rawTitle : rawTitle != null ? String(rawTitle) : null)
+      || path.split('/').pop() || 'Untitled'
     
-    // 基本フィールドの抽出
-    const title = (frontmatter.title as string) || path.split('/').pop() || 'Untitled'
-    const summary = (frontmatter.summary as string) || ''
-    const categories = (frontmatter.categories as string[]) || []
-    const tags = (frontmatter.tags as string[]) || []
+    const rawSummary = frontmatter.summary
+    const summary = typeof rawSummary === 'string' ? rawSummary : rawSummary != null ? String(rawSummary) : ''
+    
+    const categories = Array.isArray(frontmatter.categories) ? frontmatter.categories.map(String) : []
+    const tags = Array.isArray(frontmatter.tags) ? frontmatter.tags.map(String) : []
     
     // フロントマターから標準フィールドを除外
     const extraFrontmatter = { ...frontmatter }
@@ -606,58 +595,5 @@ summary: ""
       annotations: [],
       todos: []
     }
-  }
-  
-  /**
-   * YAMLフロントマターをパース（簡易版）
-   */
-  private parseFrontmatter(yaml: string): Record<string, unknown> {
-    const result: Record<string, unknown> = {}
-    const lines = yaml.split('\n')
-    let currentKey: string | null = null
-    let currentArray: string[] | null = null
-    
-    for (const line of lines) {
-      // 配列の要素
-      if (line.match(/^\s+-\s+/)) {
-        if (currentKey && currentArray) {
-          const value = line.replace(/^\s+-\s+/, '').replace(/^["']|["']$/g, '')
-          currentArray.push(value)
-        }
-        continue
-      }
-      
-      // 配列の終了チェック
-      if (currentKey && currentArray && !line.match(/^\s/)) {
-        result[currentKey] = currentArray
-        currentKey = null
-        currentArray = null
-      }
-      
-      // キー:値 のパース
-      const match = line.match(/^(\w+):\s*(.*)$/)
-      if (match) {
-        const [, key, value] = match
-        
-        if (value === '' || value === undefined) {
-          // 配列の開始
-          currentKey = key
-          currentArray = []
-        } else if (value === '[]') {
-          // 空配列
-          result[key] = []
-        } else {
-          // 値を処理
-          result[key] = value.replace(/^["']|["']$/g, '')
-        }
-      }
-    }
-    
-    // 最後の配列を保存
-    if (currentKey && currentArray) {
-      result[currentKey] = currentArray
-    }
-    
-    return result
   }
 }

@@ -56,9 +56,103 @@ export class WriteTools {
   private readonly store: IKnowledgeStore
   private readonly config: WriteToolsConfig
   
+  /** 正規表現実行のタイムアウト上限 (ms) */
+  private static readonly REGEX_TIMEOUT_MS = 5000
+  
+  /** パスの最大長 */
+  private static readonly MAX_PATH_LENGTH = 500
+  
+  /** タイトルの最大長 */
+  private static readonly MAX_TITLE_LENGTH = 500
+  
   constructor(store: IKnowledgeStore, config: WriteToolsConfig) {
     this.store = store
     this.config = config
+  }
+  
+  // ==========================================================================
+  // 入力バリデーション
+  // ==========================================================================
+  
+  /**
+   * パスの安全性を検証
+   * 
+   * - パストラバーサル（../ ）の検出
+   * - 空パス / whitespace-only の拒否
+   * - 最大長チェック
+   * - 不正な文字の検出
+   */
+  private validatePath(inputPath: string, fieldName = 'path'): void {
+    if (!inputPath || !inputPath.trim()) {
+      throw new WriteError(`${fieldName} must not be empty`, 'INVALID_OPERATION')
+    }
+    
+    if (inputPath.length > WriteTools.MAX_PATH_LENGTH) {
+      throw new WriteError(
+        `${fieldName} exceeds maximum length (${WriteTools.MAX_PATH_LENGTH} chars)`,
+        'INVALID_OPERATION',
+        inputPath
+      )
+    }
+    
+    // パストラバーサル検出: ".." セグメントを禁止
+    const segments = inputPath.split('/')
+    for (const seg of segments) {
+      if (seg === '..') {
+        throw new WriteError(
+          `${fieldName} must not contain path traversal (..)`,
+          'INVALID_OPERATION',
+          inputPath
+        )
+      }
+    }
+    
+    // 空セグメントの検出（連続スラッシュ "a//b"）
+    if (segments.some(s => s === '' && inputPath !== '')) {
+      // 先頭/末尾の空は許容（"/path" や "path/"）するが中間は拒否
+      const inner = segments.slice(1, -1)
+      if (inner.some(s => s === '')) {
+        throw new WriteError(
+          `${fieldName} must not contain empty segments (consecutive slashes)`,
+          'INVALID_OPERATION',
+          inputPath
+        )
+      }
+    }
+  }
+  
+  /**
+   * タイトルの安全性を検証
+   * 
+   * - 空文字列 / whitespace-only の拒否
+   * - 最大長チェック
+   */
+  private validateTitle(title: string): void {
+    if (!title.trim()) {
+      throw new WriteError('title must not be empty or whitespace-only', 'INVALID_OPERATION')
+    }
+    
+    if (title.length > WriteTools.MAX_TITLE_LENGTH) {
+      throw new WriteError(
+        `title exceeds maximum length (${WriteTools.MAX_TITLE_LENGTH} chars)`,
+        'INVALID_OPERATION'
+      )
+    }
+  }
+  
+  /**
+   * ContextMutation 全体のバリデーション
+   */
+  private validateMutation(op: ContextMutation): void {
+    this.validatePath(op.path)
+    
+    if (op.type === 'move' && op.to) {
+      this.validatePath(op.to, 'to')
+    }
+    
+    if (op.title !== undefined) {
+      this.validateTitle(op.title)
+    }
   }
   
   // ==========================================================================
@@ -90,6 +184,9 @@ export class WriteTools {
     
     for (const op of operations) {
       try {
+        // 共通バリデーション
+        this.validateMutation(op)
+        
         switch (op.type) {
           case 'create': {
             // バリデーション: content は必須
@@ -467,8 +564,27 @@ export class WriteTools {
         return update.content
         
       case 'regexp_replace': {
-        // フラグをパース
-        let flags = update.flags || ''
+        // パターンの長さ制限（過度に複雑なパターンを防止）
+        if (update.pattern.length > 1000) {
+          throw new WriteError(
+            'regexp pattern exceeds maximum length (1000 chars)',
+            'INVALID_OPERATION'
+          )
+        }
+        
+        // フラグのバリデーション: 許可するフラグのみ通す
+        const allowedFlags = new Set(['g', 'i', 'm', 's'])
+        const requestedFlags = update.flags || ''
+        for (const f of requestedFlags) {
+          if (!allowedFlags.has(f)) {
+            throw new WriteError(
+              `Invalid regexp flag: '${f}'. Allowed flags: g, i, m, s`,
+              'INVALID_OPERATION'
+            )
+          }
+        }
+        
+        let flags = requestedFlags
         
         // 's' フラグ (DOTALL) は JavaScript では対応していないので手動処理
         const dotAll = flags.includes('s')
@@ -477,12 +593,22 @@ export class WriteTools {
         // パターンを調整 (DOTALL対応)
         let pattern = update.pattern
         if (dotAll) {
-          // . を [\s\S] に置換 (ただし文字クラス内は除く)
           pattern = pattern.replace(/\.(?![*+?]?\])/g, '[\\s\\S]')
         }
         
-        const regex = new RegExp(pattern, flags)
-        return content.replace(regex, update.replacement)
+        // 正規表現の構文検証
+        let regex: RegExp
+        try {
+          regex = new RegExp(pattern, flags)
+        } catch (e) {
+          throw new WriteError(
+            `Invalid regexp pattern: ${(e as Error).message}`,
+            'INVALID_OPERATION'
+          )
+        }
+        
+        // タイムアウト付き実行（ReDoS 対策）
+        return this.safeRegexReplace(content, regex, update.replacement)
       }
         
       default:
@@ -491,6 +617,40 @@ export class WriteTools {
           'INVALID_OPERATION'
         )
     }
+  }
+  
+  /**
+   * タイムアウト付き正規表現置換（ReDoS 対策）
+   * 
+   * 指数的バックトラッキングが発生する悪意あるパターンに対して
+   * 一定時間で打ち切る
+   */
+  private safeRegexReplace(content: string, regex: RegExp, replacement: string): string {
+    const start = performance.now()
+    
+    const result = content.replace(regex, (...args) => {
+      // 各マッチごとに経過時間をチェック
+      const elapsed = performance.now() - start
+      if (elapsed > WriteTools.REGEX_TIMEOUT_MS) {
+        throw new WriteError(
+          `Regexp replacement timed out after ${WriteTools.REGEX_TIMEOUT_MS}ms (possible ReDoS)`,
+          'INVALID_OPERATION'
+        )
+      }
+      
+      // replacement が関数でなく文字列の場合、$1 $2 等のグループ参照を処理
+      // String.prototype.replace のデフォルト動作を再現
+      let result = replacement
+      // $& = マッチ全体
+      result = result.replace(/\$&/g, args[0])
+      // $1, $2, ... = キャプチャグループ
+      for (let i = 1; i < args.length - 2; i++) {
+        result = result.replace(new RegExp(`\\$${i}`, 'g'), args[i] ?? '')
+      }
+      return result
+    })
+    
+    return result
   }
   
   /**
@@ -558,11 +718,15 @@ export class WriteTools {
   
   /**
    * タイトルをスラッグ化（大文字は維持）
+   * 
+   * 空文字列になる場合は "untitled" にフォールバック
    */
   private slugify(title: string): string {
-    return title
+    const slug = title
       .replace(/[^\w\u3040-\u309f\u30a0-\u30ff\u4e00-\u9faf]+/g, '-')
       .replace(/^-+|-+$/g, '')
+    
+    return slug || 'untitled'
   }
   
   /**
