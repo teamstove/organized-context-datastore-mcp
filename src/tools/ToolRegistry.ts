@@ -10,6 +10,45 @@ import type { KnowledgeGraphService } from '../KnowledgeGraphService.js'
 import type { ServerMode } from '../types/index.js'
 
 // =============================================================================
+// MCP Response Builders
+// =============================================================================
+
+/**
+ * 正常レスポンスを構築
+ * 
+ * MCP 仕様 (2025-06-18) に準拠し、content (テキスト) と structuredContent (オブジェクト) の
+ * デュアル形式でレスポンスを返す。
+ * - content[0].text: JSON.stringify(data) — LLM がテキストとして読む用
+ * - structuredContent: data — プログラマティックなクライアント用
+ */
+function buildResult(data: Record<string, unknown>) {
+  return {
+    content: [{
+      type: 'text' as const,
+      text: JSON.stringify(data, null, 2)
+    }],
+    structuredContent: data
+  }
+}
+
+/**
+ * エラーレスポンスを構築
+ * 
+ * エラー時も JSON parsable かつ structuredContent を返す。
+ * isError: true により SDK の outputSchema 検証はスキップされる。
+ */
+function buildErrorResult(error: Error) {
+  return {
+    content: [{
+      type: 'text' as const,
+      text: JSON.stringify({ error: error.message }, null, 2)
+    }],
+    structuredContent: { error: error.message },
+    isError: true as const
+  }
+}
+
+// =============================================================================
 // Zod Schemas
 // =============================================================================
 
@@ -133,21 +172,9 @@ function registerReadTools(
       try {
         const service = await resolveService(isLocalDev ? (args as { cwd: string }).cwd : undefined)
         const roots = await service.listContextRoots()
-        
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(roots, null, 2)
-          }]
-        }
+        return buildResult({ roots })
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${(error as Error).message}`
-          }],
-          isError: true
-        }
+        return buildErrorResult(error as Error)
       }
     }
   )
@@ -189,21 +216,9 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
           filter: typedArgs.filter,
           includeContent: typedArgs.includeContent
         })
-        
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(contexts, null, 2)
-          }]
-        }
+        return buildResult({ contexts, count: contexts.length })
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${(error as Error).message}`
-          }],
-          isError: true
-        }
+        return buildErrorResult(error as Error)
       }
     }
   )
@@ -266,32 +281,9 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           treeTextFormat: typedArgs.treeTextFormat,
           maxNodes: typedArgs.maxNodes
         })
-        
-        // tree-text 形式の場合はそのまま返す
-        if ('format' in result && result.format === 'tree-text') {
-          return {
-            content: [{
-              type: 'text' as const,
-              text: result.tree as string
-            }]
-          }
-        }
-        
-        // JSON 形式または複数結果の場合
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(result, null, 2)
-          }]
-        }
+        return buildResult(result as unknown as Record<string, unknown>)
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${(error as Error).message}`
-          }],
-          isError: true
-        }
+        return buildErrorResult(error as Error)
       }
     }
   )
@@ -319,21 +311,9 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           typedArgs.query,
           typedArgs.scope
         )
-        
-        return {
-          content: [{
-            type: 'text' as const,
-            text: JSON.stringify(results, null, 2)
-          }]
-        }
+        return buildResult({ results, count: results.length })
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${(error as Error).message}`
-          }],
-          isError: true
-        }
+        return buildErrorResult(error as Error)
       }
     }
   )
@@ -418,20 +398,9 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
         const start = performance.now()
         const result = await service.mutateContext(typedArgs.operations)
         const took = (performance.now() - start) / 1000
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Took: ${took.toFixed(2)}s\nSuccess: ${result.success}, Errors: ${result.errors}\n\n${JSON.stringify(result.results, null, 2)}`
-          }]
-        }
+        return buildResult({ ...result, took: parseFloat(took.toFixed(2)) })
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${(error as Error).message}`
-          }],
-          isError: true
-        }
+        return buildErrorResult(error as Error)
       }
     }
   )
@@ -456,21 +425,9 @@ pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
         const typedArgs = args as { cwd?: string; message: string; paths?: string[] }
         const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
         const hash = await service.commit(typedArgs.message, typedArgs.paths)
-        
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Committed: ${hash}\nMessage: ${typedArgs.message}`
-          }]
-        }
+        return buildResult({ hash, message: typedArgs.message })
       } catch (error) {
-        return {
-          content: [{
-            type: 'text' as const,
-            text: `Error: ${(error as Error).message}`
-          }],
-          isError: true
-        }
+        return buildErrorResult(error as Error)
       }
     }
   )
