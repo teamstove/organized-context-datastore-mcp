@@ -399,10 +399,10 @@ export class FileGitStore implements IKnowledgeStore {
     try {
       await fs.unlink(fullPath)
       
-      // 自動コミット
+      // 自動コミット（対象ファイルのみ指定して他のステージを巻き込まない）
       if (this.autoCommit && this.git) {
         await this.git.rm(gitPath)
-        await this.git.commit(`Delete ${relativePath}`, {
+        await this.git.commit(`Delete ${relativePath}`, [gitPath], {
           '--author': `${this.authorName} <${this.authorEmail}>`
         })
       }
@@ -429,12 +429,12 @@ export class FileGitStore implements IKnowledgeStore {
       // ディレクトリを削除
       await fs.rm(fullPath, { recursive: true, force: true })
       
-      // 自動コミット
+      // 自動コミット（対象ファイルのみ指定して他のステージを巻き込まない）
       if (this.autoCommit && this.git && files.length > 0) {
         for (const file of files) {
           await this.git.rm(file)
         }
-        await this.git.commit(`Delete directory ${relativePath}`, {
+        await this.git.commit(`Delete directory ${relativePath}`, files, {
           '--author': `${this.authorName} <${this.authorEmail}>`
         })
       }
@@ -475,11 +475,11 @@ export class FileGitStore implements IKnowledgeStore {
     // ファイルを移動
     await fs.rename(fromFull, toFull)
     
-    // 自動コミット (Git mv)
+    // 自動コミット（対象ファイルのみ指定して他のステージを巻き込まない）
     if (this.autoCommit && this.git) {
       await this.git.add(toGit)
       await this.git.rm(fromGit)
-      await this.git.commit(`Move ${fromPath} to ${toPath}`, {
+      await this.git.commit(`Move ${fromPath} to ${toPath}`, [fromGit, toGit], {
         '--author': `${this.authorName} <${this.authorEmail}>`
       })
     }
@@ -502,18 +502,21 @@ export class FileGitStore implements IKnowledgeStore {
     // ディレクトリを移動
     await fs.rename(fromFull, toFull)
     
-    // 自動コミット
+    // 自動コミット（対象ファイルのみ指定して他のステージを巻き込まない）
     if (this.autoCommit && this.git && files.length > 0) {
+      const allAffectedPaths: string[] = []
       // 新しいファイルパスを追加
       for (const file of files) {
         const newPath = file.replace(fromPath, toPath)
         await this.git.add(newPath)
+        allAffectedPaths.push(newPath)
       }
       // 古いファイルを削除
       for (const file of files) {
         await this.git.rm(file)
+        allAffectedPaths.push(file)
       }
-      await this.git.commit(`Move directory ${fromPath} to ${toPath}`, {
+      await this.git.commit(`Move directory ${fromPath} to ${toPath}`, allAffectedPaths, {
         '--author': `${this.authorName} <${this.authorEmail}>`
       })
     }
@@ -545,24 +548,81 @@ export class FileGitStore implements IKnowledgeStore {
   
   async commit(message: string, paths?: string[]): Promise<string> {
     if (!this.git) {
-      // Git が有効でない場合はスキップ（エラーにしない）
       console.error(`[FileGitStore] Git not enabled, skipping commit: ${message}`)
       return ''
     }
     
-    // ステージング
-    if (paths && paths.length > 0) {
-      await this.git.add(paths)
-    } else {
-      await this.git.add('.')
+    // OCD が管理するファイルのみを対象にする。
+    // 既に他で git add されたファイルを巻き込まないよう、
+    // commit 時にファイルリストを明示指定する。
+    const gitPaths = await this.resolveCommitPaths(paths)
+    
+    if (gitPaths.length === 0) {
+      console.error(`[FileGitStore] No files to commit: ${message}`)
+      return ''
     }
     
-    // コミット
-    const result = await this.git.commit(message, {
+    // ステージング
+    await this.git.add(gitPaths)
+    
+    // ファイルリストを第2引数に渡すことで、
+    // これらのファイルのみがコミット対象になる
+    const result = await this.git.commit(message, gitPaths, {
       '--author': `${this.authorName} <${this.authorEmail}>`
     })
     
     return result.commit
+  }
+  
+  /**
+   * コミット対象のファイルパスを解決
+   * 
+   * - paths 指定あり: それらを Git 用パスに変換（baseDir からの相対パス）
+   * - paths 指定なし: rootPath 配下の全変更ファイルを git status で取得
+   * 
+   * 返すパスは全て baseDir (= rootPath) からの相対パス。
+   * simple-git は baseDir を cwd として git コマンドを実行するため、
+   * rootPath からの相対パスがそのまま pathspec として使える。
+   */
+  private async resolveCommitPaths(paths?: string[]): Promise<string[]> {
+    if (paths && paths.length > 0) {
+      return paths.map(p => this.toGitPath(p))
+    }
+    
+    // rootPath 配下の変更ファイルを検出。
+    // simple-git(baseDir=rootPath) の status() は Git リポジトリルートからの
+    // 相対パスを返すので、rootPath 配下のみをフィルタしたうえで
+    // rootPath からの相対パスに変換する。
+    const status = await this.git!.status()
+    
+    // Git リポジトリルートから rootPath への相対パスを計算
+    const repoRoot = await this.git!.revparse(['--show-toplevel'])
+    const relativeRoot = path.relative(repoRoot.trim(), this.rootPath)
+    
+    // status が返す全変更ファイル（Git リポジトリルートからの相対パス）
+    const allChangedFiles = [
+      ...status.not_added,
+      ...status.modified,
+      ...status.staged,
+      ...status.created,
+      ...status.deleted,
+      ...status.renamed.map(r => r.to),
+    ]
+    
+    const uniqueFiles = [...new Set(allChangedFiles)]
+    
+    if (relativeRoot === '' || relativeRoot === '.') {
+      // rootPath == リポジトリルートの場合、パス変換不要
+      return uniqueFiles
+    }
+    
+    // rootPath がサブディレクトリの場合:
+    // 1. そのプレフィックスでフィルタ
+    // 2. rootPath からの相対パスに変換
+    const prefix = relativeRoot + '/'
+    return uniqueFiles
+      .filter(f => f.startsWith(prefix))
+      .map(f => f.slice(prefix.length))
   }
   
   async getHistory(relativePath: string, limit?: number): Promise<VersionEntry[]> {
