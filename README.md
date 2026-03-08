@@ -1,81 +1,81 @@
 # OCD - Organized Context Datastore (MCP)
 
-階層構造を持つコンテキストを **LLM と人間** が共同で読み書きできる MCP サーバー。
+An MCP server that lets **LLMs and humans** collaboratively read and write hierarchically structured contexts.
 
 ---
 
-## なぜ OCD か — UX の考え方
+## Why OCD — A UX-First Approach
 
-OCD は **LLM UX** と **Human UX** の両方を最適化しています。
+OCD is designed to optimize both **LLM UX** and **Human UX**.
 
-### LLM UX — AI にとっての使いやすさ
+### LLM UX — Making AI More Effective
 
-| 課題 | OCD のアプローチ |
-|------|---------------------|
-| **コンテキスト消失** | プロジェクト知識を永続ストアに保存。セッションをまたいで一貫したコンテキストを維持 |
-| **Token 消費の非効率** | `ocd_get_context_tree` で必要なノードだけ取得。`tree-text` 形式で Token 効率を最大化 |
-| **知識の散逸** | 階層構造とパターン検索で、関連するコンテキストをまとめて取得 |
-| **整合性** | 単一のデータソース。LLM と人間が同じ Markdown を参照・編集 |
+| Challenge | OCD's Approach |
+|-----------|----------------|
+| **Context loss** | Persist project knowledge in a durable store. Maintain consistent context across sessions |
+| **Inefficient token usage** | Retrieve only the nodes you need with `ocd_get_context_tree`. Maximize token efficiency via the `tree-text` format |
+| **Knowledge fragmentation** | Fetch related contexts together using hierarchical structure and pattern-based queries |
+| **Consistency** | Single source of truth. LLMs and humans read and edit the same Markdown files |
 
-LLM は MCP ツール経由で、検索・取得・更新・コミットを自然なワークフローで行えます。
+LLMs interact via MCP tools — search, retrieve, update, and commit — in a natural workflow.
 
-### Human UX — 人間にとっての使いやすさ
+### Human UX — Making Humans Comfortable
 
-| ニーズ | OCD のアプローチ |
-|--------|---------------------|
-| **可読性** | Markdown ベース。普段使いのエディタや GitHub でそのまま編集可能 |
-| **可視化** | Web UI (`/viewer`) でツリー表示・検索・編集。ブラウザからすぐ確認 |
-| **履歴管理** | Git 連携。変更の追跡とレビューが可能 |
-| **協調** | LLM が書いたコンテキストを人間がレビュー・修正。逆も同様 |
+| Need | OCD's Approach |
+|------|----------------|
+| **Readability** | Markdown-based. Edit directly in your favorite editor or on GitHub |
+| **Visualization** | Web UI (`/viewer`) with tree view, search, and editing. Accessible from any browser |
+| **History tracking** | Git integration. Track changes and review diffs |
+| **Collaboration** | Humans review and refine what LLMs write, and vice versa |
 
-stdio モードでは **Cursor から stdio**、**人間はブラウザ** で同時にアクセスでき、ワンライナー設定で両方に対応します。
+In stdio mode, **Cursor connects via stdio** while **humans access the browser** — a single configuration serves both.
 
 ---
 
-## クイックスタート
+## Quick Start
 
-### ワンライナー（stdio + Web UI デフォルト ON）
+### One-Liner (stdio + Web UI enabled by default)
 
 ```bash
-# Cursor から stdio 接続 + 人間はブラウザで http://localhost:38291/viewer
+# Cursor connects via stdio + humans browse http://localhost:38291/viewer
 npx github:teamstove/organized-context-datastore-mcp
 
-# readonly モード
+# Read-only mode
 npx github:teamstove/organized-context-datastore-mcp --readonly
 ```
 
-### HTTP サーバーモード
+### HTTP Server Mode
 
 ```bash
-# Local Dev モード（Web UI 付き）
+# Local dev mode (with Web UI)
 npx github:teamstove/organized-context-datastore-mcp --http --port 38291
 
-# Remote Server モード
+# Remote server mode
 npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server --config ./config.json
 ```
 
 ---
 
-## 起動オプション
+## CLI Options
 
-| オプション | 説明 |
-|-----------|------|
-| (なし) | stdio モード（デフォルト）+ Web UI を port 38291 で起動 |
-| `--http` | HTTP サーバーモード |
-| `--readonly` | 書き込みツールを無効化 |
-| `--port <port>` | HTTP ポート番号（デフォルト: 38291） |
-| `--web-ui-port <port>` | stdio モード時の Web UI ポート（デフォルト: 38291） |
-| `--disable-web-ui` | Web UI を無効化 |
-| `--mode <mode>` | HTTP のみ: local-dev / remote-server |
-| `--config <path>` | remote-server モード用の設定ファイル |
+| Option | Description |
+|--------|-------------|
+| *(none)* | stdio mode (default) + Web UI on port 38291 |
+| `--http` | HTTP server mode |
+| `--readonly` | Disable write tools |
+| `--port <port>` | HTTP port number (default: 38291) |
+| `--web-ui-port <port>` | Web UI port in stdio mode (default: 38291) |
+| `--disable-web-ui` | Disable the Web UI |
+| `--mode <mode>` | HTTP only: `local-dev` / `remote-server` |
+| `--config <path>` | Config file for `remote-server` mode |
 
-**重複起動時**: 同じポートで既に OCD が動いている場合、2 回目以降の起動は「すでに同じポートで OCD が起動しています」とログして正常終了（exit 0）します。ポートが別プロセスで使用中のときのみエラー終了します。サーバー種別の判定には **GET /whois** を使用しており、応答が `OCD` であれば自サーバーとみなします。
+**Duplicate launch behavior**: If OCD is already running on the same port, subsequent launches log "OCD is already running on this port" and exit cleanly (exit 0). An error exit only occurs when the port is occupied by a different process. The server identity check uses **GET /whois** — if the response is `OCD`, it is recognized as an existing OCD instance.
 
 ---
 
-## Cursor / IDE 設定
+## Cursor / IDE Configuration
 
-### ワンライナー（stdio + Web UI）
+### One-Liner (stdio + Web UI)
 
 ```json
 {
@@ -91,10 +91,10 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 }
 ```
 
-- **Cursor** → stdio で MCP 接続
-- **人間** → ブラウザで `http://localhost:38291/viewer`
+- **Cursor** connects via stdio
+- **Humans** browse `http://localhost:38291/viewer`
 
-### stdio のみ（Web UI 無効）
+### stdio Only (Web UI disabled)
 
 ```json
 "args": [
@@ -104,7 +104,7 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 ]
 ```
 
-### bin 経由（パッケージ取得後）
+### Via bin Entry (after package install)
 
 ```json
 {
@@ -117,10 +117,10 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 }
 ```
 
-### HTTP モード
+### HTTP Mode
 
 ```bash
-# ターミナルで起動
+# Start the server in a terminal
 npx github:teamstove/organized-context-datastore-mcp --http --port 38291
 ```
 
@@ -134,9 +134,9 @@ npx github:teamstove/organized-context-datastore-mcp --http --port 38291
 }
 ```
 
-`http://localhost:38291/viewer` で Web UI にアクセス可能。
+Web UI is available at `http://localhost:38291/viewer`.
 
-### Context Roots フィルタリング（HTTP モード）
+### Context Roots Filtering (HTTP Mode)
 
 ```json
 {
@@ -151,18 +151,18 @@ npx github:teamstove/organized-context-datastore-mcp --http --port 38291
 }
 ```
 
-| パラメータ | 説明 | 例 |
-|-----------|------|-----|
-| `roots` | 含める Context Root IDs（カンマ区切り） | `?roots=A,B,C` |
-| `readonly` | readonly にする Context Root IDs | `?readonly=C` |
+| Parameter | Description | Example |
+|-----------|-------------|---------|
+| `roots` | Context Root IDs to include (comma-separated) | `?roots=A,B,C` |
+| `readonly` | Context Root IDs to make read-only | `?readonly=C` |
 
 ---
 
-## 設定ファイル
+## Configuration
 
-### ローカル設定 (`.ocd.config.js`)
+### Local Config (`.ocd.config.js`)
 
-プロジェクトルートに配置。cwd から上位に自動探索されます。
+Place in the project root. OCD searches upward from cwd automatically.
 
 ```javascript
 export default {
@@ -181,39 +181,39 @@ export default {
 }
 ```
 
-### グローバル設定 (`~/.ocd/config.js`)
+### Global Config (`~/.ocd/config.js`)
 
-全プロジェクトで共有する Context Roots を定義。
+Define Context Roots shared across all projects.
 
-### git 設定
+### Git Modes
 
-| 値 | 説明 |
-|----|------|
-| `'auto-commit'` | 各操作後に自動コミット |
-| `'manual'` | `commit` ツールで明示的にコミット（**デフォルト**） |
-| `'none'` | Git を使用しない |
-
----
-
-## MCP ツール一覧
-
-| ツール | 説明 |
-|--------|------|
-| `ocd_list_context_roots` | Context Root 一覧を取得 |
-| `ocd_get_contexts` | パターンとフィルタでコンテキストを取得 |
-| `ocd_get_context_tree` | コンテキストツリー（目次）を取得 |
-| `ocd_search_contexts` | キーワードでコンテキストを検索 |
-| `ocd_mutate_context` | コンテキストを変更（create/update/delete/move） |
-| `ocd_commit` | 変更をコミット（git: 'manual' モード用） |
-
-### ocd_mutate_context のパフォーマンス・注意
-
-- **直列化**: 同一の Context Root（同一 cwd）に対して、`ocd_mutate_context` と `ocd_commit` は **同時に 1 件ずつ** 実行されます。連続で呼ぶと 2 件目以降は前の完了を待つため、フリーズではなく「待ち」になります。これにより Git 操作の競合を防いでいます。
-- **move の重さ**: `move` 操作では、同じ Context Root 内の被リンク（リンク切れ防止）を更新するため、ルート配下の全 `.md` をスキャンすることがあります。ファイル数が多いと 1 回の move でも時間がかかることがあります。
+| Value | Description |
+|-------|-------------|
+| `'auto-commit'` | Automatically commit after each operation |
+| `'manual'` | Commit explicitly via the `ocd_commit` tool (**default**) |
+| `'none'` | Do not use Git |
 
 ---
 
-## ディレクトリ構造例
+## MCP Tools
+
+| Tool | Description |
+|------|-------------|
+| `ocd_list_context_roots` | List all Context Roots |
+| `ocd_get_contexts` | Retrieve contexts by pattern and filters |
+| `ocd_get_context_tree` | Get the context tree (table of contents) |
+| `ocd_search_contexts` | Search contexts by keyword |
+| `ocd_mutate_context` | Mutate a context (create / update / delete / move) |
+| `ocd_commit` | Commit changes (for `git: 'manual'` mode) |
+
+### ocd_mutate_context — Performance Notes
+
+- **Serialization**: Within the same Context Root (same cwd), `ocd_mutate_context` and `ocd_commit` execute **one at a time**. When called in rapid succession, subsequent calls wait for the previous one to complete — this is a queue, not a freeze. This prevents Git operation conflicts.
+- **Move cost**: A `move` operation scans all `.md` files under the Context Root to update internal links and prevent broken references. If the root contains many files, a single move may take noticeable time.
+
+---
+
+## Directory Structure Example
 
 ```
 my-context-store/
@@ -231,27 +231,27 @@ my-context-store/
 
 ---
 
-## Markdown フォーマット
+## Markdown Format
 
 ```markdown
 ---
-title: 機能仕様
+title: Feature Specification
 status: draft
 priority: high
 ---
 
-# ユーザー認証機能
+# User Authentication
 
-## 概要
+## Overview
 
-ユーザー認証機能の実装について...
+Details about the user authentication implementation...
 ```
 
-`title` 以外の frontmatter フィールドは `attrs` として扱われます。
+All frontmatter fields other than `title` are treated as `attrs`.
 
 ---
 
-## インストール
+## Installation
 
 ```bash
 git clone https://github.com/teamstove/organized-context-datastore-mcp.git
@@ -259,16 +259,16 @@ cd organized-context-datastore-mcp
 npm install
 ```
 
-Web UI は初回起動時に自動ビルドされます。手動ビルドは `npm run build:web-ui`。
+The Web UI is built automatically on first launch. To build manually: `npm run build:web-ui`.
 
 ---
 
-## 開発者向け
+## For Developers
 
-ローカル開発・テスト・ビルドの手順は [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) を参照してください。
+See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for local development, testing, and build instructions.
 
 ---
 
-## ライセンス
+## License
 
 MIT
