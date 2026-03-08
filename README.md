@@ -1,34 +1,17 @@
 # OCD - Organized Context Datastore (MCP)
 
-An MCP server that lets **LLMs and humans** collaboratively read and write hierarchically structured contexts.
+> **[日本語版はこちら (README_jp.md)](./README_jp.md)**
 
----
+**Give your AI persistent, structured memory — and let humans see it too.**
 
-## Why OCD — A UX-First Approach
+OCD is an [MCP](https://modelcontextprotocol.io/) server that stores project knowledge as Markdown files in a hierarchical tree. LLMs read and write via MCP tools; humans browse and edit via a built-in Web UI or any text editor. Both share the same source of truth.
 
-OCD is designed to optimize both **LLM UX** and **Human UX**.
+### Why OCD?
 
-### LLM UX — Making AI More Effective
-
-| Challenge | OCD's Approach |
-|-----------|----------------|
-| **Context loss** | Persist project knowledge in a durable store. Maintain consistent context across sessions |
-| **Inefficient token usage** | Retrieve only the nodes you need with `ocd_get_context_tree`. Maximize token efficiency via the `tree-text` format |
-| **Knowledge fragmentation** | Fetch related contexts together using hierarchical structure and pattern-based queries |
-| **Consistency** | Single source of truth. LLMs and humans read and edit the same Markdown files |
-
-LLMs interact via MCP tools — search, retrieve, update, and commit — in a natural workflow.
-
-### Human UX — Making Humans Comfortable
-
-| Need | OCD's Approach |
-|------|----------------|
-| **Readability** | Markdown-based. Edit directly in your favorite editor or on GitHub |
-| **Visualization** | Web UI (`/viewer`) with tree view, search, and editing. Accessible from any browser |
-| **History tracking** | Git integration. Track changes and review diffs |
-| **Collaboration** | Humans review and refine what LLMs write, and vice versa |
-
-In stdio mode, **Cursor connects via stdio** while **humans access the browser** — a single configuration serves both.
+- **No more lost context** — Project knowledge persists across sessions in a Git-backed store
+- **Token-efficient** — Fetch only the branches you need with `tree-text` format, not entire documents
+- **Human-friendly** — Plain Markdown + frontmatter. Edit in VS Code, review on GitHub, or use the built-in Web UI
+- **One command** — `npx github:teamstove/organized-context-datastore-mcp` starts both the MCP server and the Web UI
 
 ---
 
@@ -53,6 +36,29 @@ npx github:teamstove/organized-context-datastore-mcp --http --port 38291
 # Remote server mode
 npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server --config ./config.json
 ```
+
+---
+
+## How It Works
+
+```
+┌──────────────┐   MCP (stdio / HTTP)   ┌─────────────────┐
+│  LLM / IDE   │ ◄───────────────────► │   OCD Server    │
+│  (Cursor…)   │                        │                 │
+└──────────────┘                        │  Markdown files │
+                                        │  + frontmatter  │
+┌──────────────┐   HTTP + Web UI        │  + Git history  │
+│    Human     │ ◄───────────────────► │                 │
+│  (Browser)   │                        └─────────────────┘
+└──────────────┘
+```
+
+| For LLMs | For Humans |
+|----------|------------|
+| Persistent memory across sessions | Plain Markdown — edit anywhere |
+| Hierarchical tree with pattern queries | Built-in Web UI with tree view & search |
+| Token-efficient `tree-text` retrieval | Git-backed history & diffs |
+| 6 MCP tools: list, get, tree, search, mutate, commit | Review and refine what the AI writes |
 
 ---
 

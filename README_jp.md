@@ -1,34 +1,17 @@
 # OCD - Organized Context Datastore (MCP)
 
-階層構造を持つコンテキストを **LLM と人間** が共同で読み書きできる MCP サーバー。
+> **[English version (README.md)](./README.md)**
 
----
+**AI に永続的で構造化されたメモリを与え、人間もそれを見られるようにする。**
 
-## なぜ OCD か — UX の考え方
+OCD は [MCP](https://modelcontextprotocol.io/) サーバーです。プロジェクト知識を Markdown ファイルの階層ツリーとして保存し、LLM は MCP ツール経由で、人間は内蔵の Web UI や任意のテキストエディタで読み書きできます。両者が同じデータソースを共有します。
 
-OCD は **LLM UX** と **Human UX** の両方を最適化しています。
+### なぜ OCD か？
 
-### LLM UX — AI にとっての使いやすさ
-
-| 課題 | OCD のアプローチ |
-|------|---------------------|
-| **コンテキスト消失** | プロジェクト知識を永続ストアに保存。セッションをまたいで一貫したコンテキストを維持 |
-| **Token 消費の非効率** | `ocd_get_context_tree` で必要なノードだけ取得。`tree-text` 形式で Token 効率を最大化 |
-| **知識の散逸** | 階層構造とパターン検索で、関連するコンテキストをまとめて取得 |
-| **整合性** | 単一のデータソース。LLM と人間が同じ Markdown を参照・編集 |
-
-LLM は MCP ツール経由で、検索・取得・更新・コミットを自然なワークフローで行えます。
-
-### Human UX — 人間にとっての使いやすさ
-
-| ニーズ | OCD のアプローチ |
-|--------|---------------------|
-| **可読性** | Markdown ベース。普段使いのエディタや GitHub でそのまま編集可能 |
-| **可視化** | Web UI (`/viewer`) でツリー表示・検索・編集。ブラウザからすぐ確認 |
-| **履歴管理** | Git 連携。変更の追跡とレビューが可能 |
-| **協調** | LLM が書いたコンテキストを人間がレビュー・修正。逆も同様 |
-
-stdio モードでは **Cursor から stdio**、**人間はブラウザ** で同時にアクセスでき、ワンライナー設定で両方に対応します。
+- **コンテキスト消失ゼロ** — プロジェクト知識を Git バックアップ付きストアに永続化。セッションをまたいでも失われない
+- **Token 効率** — `tree-text` 形式で必要なブランチだけ取得。ドキュメント全体を読み込む必要なし
+- **人間にやさしい** — 素の Markdown + frontmatter。VS Code で編集、GitHub でレビュー、内蔵 Web UI で閲覧
+- **ワンコマンド** — `npx github:teamstove/organized-context-datastore-mcp` で MCP サーバーと Web UI が同時に起動
 
 ---
 
@@ -56,18 +39,41 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 
 ---
 
+## 仕組み
+
+```
+┌──────────────┐   MCP (stdio / HTTP)   ┌─────────────────┐
+│  LLM / IDE   │ ◄───────────────────► │   OCD Server    │
+│  (Cursor…)   │                        │                 │
+└──────────────┘                        │  Markdown files │
+                                        │  + frontmatter  │
+┌──────────────┐   HTTP + Web UI        │  + Git history  │
+│    人間      │ ◄───────────────────► │                 │
+│  (ブラウザ)   │                        └─────────────────┘
+└──────────────┘
+```
+
+| LLM にとって | 人間にとって |
+|-------------|-------------|
+| セッションをまたぐ永続メモリ | 素の Markdown — どこでも編集可能 |
+| 階層ツリーとパターン検索 | 内蔵 Web UI でツリー表示・検索 |
+| Token 効率の高い `tree-text` 取得 | Git による履歴管理・差分レビュー |
+| 6つの MCP ツール: list, get, tree, search, mutate, commit | AI が書いた内容を人間がレビュー・修正 |
+
+---
+
 ## 起動オプション
 
 | オプション | 説明 |
 |-----------|------|
-| (なし) | stdio モード（デフォルト）+ Web UI を port 38291 で起動 |
+| *(なし)* | stdio モード（デフォルト）+ Web UI を port 38291 で起動 |
 | `--http` | HTTP サーバーモード |
 | `--readonly` | 書き込みツールを無効化 |
 | `--port <port>` | HTTP ポート番号（デフォルト: 38291） |
 | `--web-ui-port <port>` | stdio モード時の Web UI ポート（デフォルト: 38291） |
 | `--disable-web-ui` | Web UI を無効化 |
-| `--mode <mode>` | HTTP のみ: local-dev / remote-server |
-| `--config <path>` | remote-server モード用の設定ファイル |
+| `--mode <mode>` | HTTP のみ: `local-dev` / `remote-server` |
+| `--config <path>` | `remote-server` モード用の設定ファイル |
 
 **重複起動時**: 同じポートで既に OCD が動いている場合、2 回目以降の起動は「すでに同じポートで OCD が起動しています」とログして正常終了（exit 0）します。ポートが別プロセスで使用中のときのみエラー終了します。サーバー種別の判定には **GET /whois** を使用しており、応答が `OCD` であれば自サーバーとみなします。
 
@@ -190,7 +196,7 @@ export default {
 | 値 | 説明 |
 |----|------|
 | `'auto-commit'` | 各操作後に自動コミット |
-| `'manual'` | `commit` ツールで明示的にコミット（**デフォルト**） |
+| `'manual'` | `ocd_commit` ツールで明示的にコミット（**デフォルト**） |
 | `'none'` | Git を使用しない |
 
 ---
@@ -204,7 +210,7 @@ export default {
 | `ocd_get_context_tree` | コンテキストツリー（目次）を取得 |
 | `ocd_search_contexts` | キーワードでコンテキストを検索 |
 | `ocd_mutate_context` | コンテキストを変更（create/update/delete/move） |
-| `ocd_commit` | 変更をコミット（git: 'manual' モード用） |
+| `ocd_commit` | 変更をコミット（`git: 'manual'` モード用） |
 
 ### ocd_mutate_context のパフォーマンス・注意
 
