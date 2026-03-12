@@ -21,6 +21,7 @@ import type {
   ContextRootConfig
 } from '../types/index.js'
 import { parseMarkdown, toContextNode } from '../parser/MarkdownParser.js'
+import { stripFrontmatterFromContent, autoFixFrontmatter } from '../parser/frontmatterUtils.js'
 
 /** システムデフォルトの拡張子 */
 const SYSTEM_DEFAULT_EXTENSION = '.md'
@@ -418,6 +419,9 @@ export class WriteTools {
   
   /**
    * 単一コンテキスト更新 (コミットなし)
+   * 
+   * 既存ファイルの YAML frontmatter が壊れている場合（クォートされていないコロン等）、
+   * 自動修復してからパースする。
    */
   private async updateContextSingle(op: UpdateContextOperation): Promise<ContextNode> {
     const { path, title, summary, attrs, contentUpdates } = op
@@ -425,7 +429,21 @@ export class WriteTools {
     this.checkWritePermission(path)
     
     const existing = await this.store.read(path)
-    const { data: frontmatter, content: existingContent } = matter(existing)
+    
+    // YAML パースエラー時は自動修復してリトライ
+    let frontmatter: Record<string, unknown>
+    let existingContent: string
+    
+    try {
+      const parsed = matter(existing)
+      frontmatter = parsed.data
+      existingContent = parsed.content
+    } catch {
+      const fixed = autoFixFrontmatter(existing)
+      const parsed = matter(fixed)
+      frontmatter = parsed.data
+      existingContent = parsed.content
+    }
     
     const newFrontmatter = {
       ...frontmatter,
@@ -731,20 +749,29 @@ export class WriteTools {
   
   /**
    * Markdown を生成
+   * 
+   * content に frontmatter が埋め込まれている場合（LLM が content に
+   * `---\ntitle: ...\n---\n# 本文` を渡すケース）は、自動的に分離して
+   * 明示パラメータとマージする。
    */
   private generateMarkdown(params: {
     title: string
     attrs: Record<string, unknown>
     content: string
   }): string {
-    const frontmatter = {
+    // content に frontmatter が含まれている場合は分離してマージ
+    const { body, extractedData } = stripFrontmatterFromContent(
+      params.content || `# ${params.title}`
+    )
+    
+    // マージ優先順位: extractedData (content内FM) < params.attrs (明示指定) < title (常に最優先)
+    const frontmatter: Record<string, unknown> = {
+      ...extractedData,
+      ...params.attrs,
       title: params.title,
-      ...params.attrs
     }
     
-    const content = params.content || `# ${params.title}`
-    
-    return matter.stringify(content, frontmatter)
+    return matter.stringify(body, frontmatter)
   }
   
   /**

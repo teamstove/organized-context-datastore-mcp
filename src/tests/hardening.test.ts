@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import matter from 'gray-matter'
 import { parseMarkdown, toContextNode } from '../parser/MarkdownParser.js'
-import { extractFrontmatterValues } from '../parser/frontmatterUtils.js'
+import { extractFrontmatterValues, stripFrontmatterFromContent, autoFixFrontmatter } from '../parser/frontmatterUtils.js'
 import { WriteTools, WriteError } from '../tools/WriteTools.js'
 import type { IKnowledgeStore } from '../storage/IKnowledgeStore.js'
 import type { ContextMutation, WritePermissionConfig } from '../types/index.js'
@@ -727,5 +727,249 @@ describe('MarkdownParser エッジケース', () => {
     })
     
     expect(node.title).toBe('進捗報告 📊🎉')
+  })
+})
+
+// =============================================================================
+// 9. stripFrontmatterFromContent テスト
+// =============================================================================
+
+describe('stripFrontmatterFromContent', () => {
+  it('frontmatter なしの content はそのまま返す', () => {
+    const content = '# Hello\n\nSome text'
+    const { body, extractedData } = stripFrontmatterFromContent(content)
+    
+    expect(body).toBe(content)
+    expect(Object.keys(extractedData)).toHaveLength(0)
+  })
+  
+  it('frontmatter 付き content から frontmatter を分離する', () => {
+    const content = '---\ntitle: テストタイトル\nsummary: テストサマリ\n---\n# 本文\n\nテスト'
+    const { body, extractedData } = stripFrontmatterFromContent(content)
+    
+    expect(body).toBe('# 本文\n\nテスト')
+    expect(extractedData.title).toBe('テストタイトル')
+    expect(extractedData.summary).toBe('テストサマリ')
+  })
+  
+  it('壊れた YAML を含む frontmatter でも正規表現フォールバックで分離できる', () => {
+    // コロン含む title がクォートされていないケース
+    const content = '---\ntitle: 実証: 加工手配管理で実行\nsummary: テスト\n---\n# 本文'
+    const { body, extractedData } = stripFrontmatterFromContent(content)
+    
+    expect(body).toBe('# 本文')
+    // 正規表現フォールバックでは最初の : 以降を値として扱う
+    expect(extractedData.title).toBeDefined()
+    expect(extractedData.summary).toBe('テスト')
+  })
+  
+  it('空の content はそのまま返す', () => {
+    const { body, extractedData } = stripFrontmatterFromContent('')
+    
+    expect(body).toBe('')
+    expect(Object.keys(extractedData)).toHaveLength(0)
+  })
+})
+
+// =============================================================================
+// 10. autoFixFrontmatter テスト
+// =============================================================================
+
+describe('autoFixFrontmatter', () => {
+  it('frontmatter なしの content はそのまま返す', () => {
+    const content = '# Hello\n\nSome text'
+    expect(autoFixFrontmatter(content)).toBe(content)
+  })
+  
+  it('正常な frontmatter はそのまま返す', () => {
+    const content = "---\ntitle: 'Hello: World'\nsummary: Test\n---\n# Body"
+    expect(autoFixFrontmatter(content)).toBe(content)
+  })
+  
+  it('クォートされていないコロンを含む title を修復する', () => {
+    const broken = '---\ntitle: 実証: 加工手配管理で実行\nsummary: テスト\n---\n# 本文'
+    const fixed = autoFixFrontmatter(broken)
+    
+    // 修復後は gray-matter でパースできる
+    const parsed = matter(fixed)
+    expect(parsed.data.title).toBe('実証: 加工手配管理で実行')
+    expect(parsed.data.summary).toBe('テスト')
+    expect(parsed.content.trim()).toBe('# 本文')
+  })
+  
+  it('複数のコロンを含む title を修復する', () => {
+    const broken = '---\ntitle: Step1: 初期化: 処理開始\n---\n# Content'
+    const fixed = autoFixFrontmatter(broken)
+    
+    const parsed = matter(fixed)
+    expect(parsed.data.title).toBe('Step1: 初期化: 処理開始')
+  })
+  
+  it('# を含む値を修復する', () => {
+    const broken = '---\ntitle: #important topic\n---\n# Content'
+    const fixed = autoFixFrontmatter(broken)
+    
+    const parsed = matter(fixed)
+    expect(parsed.data.title).toBe('#important topic')
+  })
+  
+  it('括弧類を含む値を修復する', () => {
+    const broken = '---\ntitle: array [0] {key: val}\n---\n# Content'
+    const fixed = autoFixFrontmatter(broken)
+    
+    const parsed = matter(fixed)
+    expect(parsed.data.title).toBe('array [0] {key: val}')
+  })
+  
+  it('既にクォート済みの値は二重クォートしない', () => {
+    const content = "---\ntitle: 'Step1: 初期化'\nsummary: 'テスト: サマリ'\n---\n# Body"
+    const fixed = autoFixFrontmatter(content)
+    
+    // 変わらないはず
+    expect(fixed).toBe(content)
+    
+    const parsed = matter(fixed)
+    expect(parsed.data.title).toBe('Step1: 初期化')
+  })
+  
+  it('値にシングルクォートが含まれる場合はエスケープする', () => {
+    const broken = "---\ntitle: it's a test: with colon\n---\n# Content"
+    const fixed = autoFixFrontmatter(broken)
+    
+    const parsed = matter(fixed)
+    expect(parsed.data.title).toBe("it's a test: with colon")
+  })
+})
+
+// =============================================================================
+// 11. Content に frontmatter が含まれる場合の mutateContext create テスト
+// =============================================================================
+
+describe('mutateContext create: content に frontmatter が含まれるケース', () => {
+  it('content に frontmatter 付き Markdown を渡してもクラッシュしない', async () => {
+    const store = createMockStore()
+    const tools = createWriteTools(store)
+    
+    // LLM が content に frontmatter を含めるケース
+    const result = await tools.mutateContext([{
+      type: 'create',
+      path: 'test/embedded-fm',
+      title: '実証: 加工手配管理で実行',
+      summary: 'テストサマリ',
+      content: '---\ntitle: 実証: 加工手配管理で実行\nsummary: テストサマリ\n---\n# 実証: 加工手配管理で実行\n\nテスト本文'
+    }])
+    
+    expect(result.success).toBe(1)
+    expect(result.errors).toBe(0)
+    
+    // 書き込まれた内容がパースできることを確認
+    const written = await store.read('test/embedded-fm')
+    const parsed = matter(written)
+    expect(parsed.data.title).toBe('実証: 加工手配管理で実行')
+  })
+  
+  it('content に frontmatter が含まれている場合、明示パラメータが優先される', async () => {
+    const store = createMockStore()
+    const tools = createWriteTools(store)
+    
+    const result = await tools.mutateContext([{
+      type: 'create',
+      path: 'test/priority-check',
+      title: '明示タイトル',
+      summary: '明示サマリ',
+      content: '---\ntitle: content内タイトル\nsummary: content内サマリ\n---\n# 本文'
+    }])
+    
+    expect(result.success).toBe(1)
+    
+    const written = await store.read('test/priority-check')
+    const parsed = matter(written)
+    // 明示パラメータが優先
+    expect(parsed.data.title).toBe('明示タイトル')
+    expect(parsed.data.summary).toBe('明示サマリ')
+  })
+  
+  it('content に frontmatter がない通常ケースは変わらず動作する', async () => {
+    const store = createMockStore()
+    const tools = createWriteTools(store)
+    
+    const result = await tools.mutateContext([{
+      type: 'create',
+      path: 'test/normal-content',
+      title: '通常タイトル',
+      summary: 'テスト',
+      content: '# 通常タイトル\n\n本文テスト'
+    }])
+    
+    expect(result.success).toBe(1)
+    
+    const written = await store.read('test/normal-content')
+    const parsed = matter(written)
+    expect(parsed.data.title).toBe('通常タイトル')
+    expect(parsed.content.trim()).toContain('# 通常タイトル')
+  })
+})
+
+// =============================================================================
+// 12. 壊れた YAML を含む既存ファイルの update テスト
+// =============================================================================
+
+describe('mutateContext update: 壊れた YAML を含む既存ファイルの修復', () => {
+  it('クォートされていないコロンを含む既存ファイルを update できる', async () => {
+    const store = createMockStore()
+    
+    // 壊れた YAML の既存ファイルをストアに直接書き込む
+    const brokenContent = '---\ntitle: 実証: 加工手配管理\nsummary: テスト\n---\n# 本文\n\n既存テキスト'
+    await store.write('test/broken-yaml', brokenContent)
+    
+    const tools = createWriteTools(store)
+    
+    // update で summary を変更
+    const result = await tools.mutateContext([{
+      type: 'update',
+      path: 'test/broken-yaml',
+      summary: '更新されたサマリ'
+    }])
+    
+    expect(result.success).toBe(1)
+    expect(result.errors).toBe(0)
+    
+    // 更新後のファイルがパースできることを確認
+    const written = await store.read('test/broken-yaml')
+    const parsed = matter(written)
+    expect(parsed.data.title).toBe('実証: 加工手配管理')
+    expect(parsed.data.summary).toBe('更新されたサマリ')
+  })
+})
+
+// =============================================================================
+// 13. parseMarkdown の YAML 自動修復テスト
+// =============================================================================
+
+describe('parseMarkdown: YAML 自動修復', () => {
+  it('壊れた frontmatter を自動修復してパースする', () => {
+    const broken = '---\ntitle: OAuth2.0: 認証フロー実装ガイド\nsummary: 認証の実装手順\n---\n# OAuth2.0: 認証フロー\n\n本文'
+    
+    // parseMarkdown がクラッシュせずにパースできることを確認
+    const parsed = parseMarkdown(broken, 'test/broken')
+    const node = toContextNode('test/broken', parsed, {
+      createdAt: '2025-01-01',
+      updatedAt: '2025-01-01'
+    })
+    
+    expect(node.title).toBe('OAuth2.0: 認証フロー実装ガイド')
+    expect(node.content).toContain('# OAuth2.0: 認証フロー')
+  })
+  
+  it('正常な frontmatter はそのまま動作する', () => {
+    const normal = matter.stringify('# 本文', { title: 'テスト', summary: 'サマリ' })
+    
+    const parsed = parseMarkdown(normal, 'test/normal')
+    const node = toContextNode('test/normal', parsed, {
+      createdAt: '2025-01-01',
+      updatedAt: '2025-01-01'
+    })
+    
+    expect(node.title).toBe('テスト')
   })
 })

@@ -11,6 +11,7 @@ import type {
   Todo, 
   Section 
 } from '../types/index.js'
+import { autoFixFrontmatter } from './frontmatterUtils.js'
 
 /**
  * Markdown パース結果
@@ -72,10 +73,26 @@ const LINK_PATTERN = /(?:\[([^\]]*)\]\(([^)]+)\)|\[\[([^\]]+)\]\])/g
 
 /**
  * Markdown をパースする
+ * 
+ * YAML パースエラー時は frontmatter の自動修復を試みる。
+ * 主な修復対象: 値にクォートされていないコロン等の YAML 特殊文字。
  */
 export function parseMarkdown(rawContent: string, filePath: string): ParsedMarkdown {
-  // Frontmatter をパース
-  const { data: frontmatter, content } = matter(rawContent)
+  // Frontmatter をパース（エラー時は自動修復してリトライ）
+  let frontmatter: Record<string, unknown>
+  let content: string
+  
+  try {
+    const parsed = matter(rawContent)
+    frontmatter = parsed.data
+    content = parsed.content
+  } catch {
+    // YAML パースエラー → 値をクォートして修復を試みる
+    const fixed = autoFixFrontmatter(rawContent)
+    const parsed = matter(fixed)
+    frontmatter = parsed.data
+    content = parsed.content
+  }
   
   // 行ごとに分割
   const lines = content.split('\n')
