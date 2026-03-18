@@ -77,6 +77,26 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 
 **重複起動時**: 同じポートで既に OCD が動いている場合、2 回目以降の起動は「すでに同じポートで OCD が起動しています」とログして正常終了（exit 0）します。ポートが別プロセスで使用中のときのみエラー終了します。サーバー種別の判定には **GET /whois** を使用しており、応答が `OCD` であれば自サーバーとみなします。
 
+### CLI `tool` サブコマンド（MCP ツールと同等の処理）
+
+MCP サーバーを起動せず、読み取り・更新を **ワンショット**で実行します。結果は **stdout に JSON**（`jq` などにパイプ可能）。
+
+```bash
+ocd-mcp tool --help
+ocd-mcp tool --cwd . list-roots
+ocd-mcp tool --cwd . get-contexts --patterns 'docs/**'
+ocd-mcp tool --cwd . search --query "認証"
+```
+
+| 用途 | フラグ | 意味 |
+|------|--------|------|
+| 通常のプロジェクト | `--cwd <dir>` | このディレクトリから `.ocd.config.js` を上位探索（MCP の `cwd` と同様）。 |
+| 固定ストレージ | `--storage <dir>` | `loadConfig` のルート。**HTTP の remote-server 用 JSON（`--config`）とは別物**。 |
+
+- **`--readonly`**: `mutate` / `commit` を拒否します。
+- **注意**: stdio の MCP サーバーが同じ Git ルートに書いている最中に CLI で `mutate` / `commit` しないでください（ロック・競合の恐れ）。
+- **`get-contexts --include-content`**: 出力が非常に大きくなり得ます。
+
 ---
 
 ## Cursor / IDE 設定

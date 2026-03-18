@@ -16,6 +16,7 @@ import { KnowledgeGraphService as KGServiceClass } from '../../KnowledgeGraphSer
 import { z } from 'zod'
 import type { ServerMode } from '../../types/index.js'
 import { resolveConfigFromCwd, resolvedConfigToMcpConfig } from '../../config/ConfigLoader.js'
+import { normalizeOcdToolName, runOcdTool } from '../../ocd/runOcdTool.js'
 
 /**
  * MCPリクエストスキーマ (JSON-RPC 2.0)
@@ -367,57 +368,14 @@ async function handleMcpMethod(
 }
 
 /**
- * ツール呼び出しを実行
+ * ツール呼び出しを実行（readonly は呼び出し元で既に検証済みのため blockWrites は false）
  */
 async function executeToolCall(
   service: KnowledgeGraphService,
   toolName: string,
   args: Record<string, unknown>
 ): Promise<unknown> {
-  switch (toolName) {
-    case 'list_context_roots':
-      return await service.listContextRoots()
-    
-    case 'get_contexts':
-      return await service.getContexts({
-        patterns: args.patterns as string[],
-        filter: args.filter as string | undefined,
-        includeContent: args.includeContent as boolean | undefined
-      })
-    
-    case 'get_context_tree':
-      return await service.getContextTree({
-        rootIds: args.rootIds as string[],
-        depth: args.depth as number | undefined,
-        format: args.format as 'json' | 'tree-text' | undefined,
-        treeTextFormat: args.treeTextFormat as string | undefined,
-        maxNodes: args.maxNodes as number | undefined
-      })
-    
-    case 'search_contexts':
-      return await service.searchContexts(
-        args.query as string,
-        args.scope as string[] | undefined
-      )
-    
-    case 'mutate_context': {
-      const start = performance.now()
-      const result = await service.mutateContext(
-        args.operations as Parameters<typeof service.mutateContext>[0]
-      )
-      const took = (performance.now() - start) / 1000
-      return { ...result, took }
-    }
-    
-    case 'commit':
-      return await service.commit(
-        args.message as string,
-        args.paths as string[] | undefined
-      )
-    
-    default:
-      throw new Error(`Unknown tool: ${toolName}`)
-  }
+  return runOcdTool(service, toolName, args, { blockWrites: false })
 }
 
 // =============================================================================
@@ -626,7 +584,8 @@ export function createLocalDevMcpRoutes(serverMode: ServerMode): Router {
  * 書き込みツールかどうかを判定
  */
 function isWriteTool(toolName: string): boolean {
-  return ['mutate_context', 'commit'].includes(toolName)
+  const n = normalizeOcdToolName(toolName)
+  return n === 'mutate_context' || n === 'commit'
 }
 
 /**

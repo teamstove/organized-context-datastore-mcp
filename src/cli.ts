@@ -45,8 +45,8 @@ interface CliArgs {
 // 引数パース
 // =============================================================================
 
-function parseArgs(): CliArgs {
-  const args = process.argv.slice(2)
+function parseArgs(argv: string[]): CliArgs {
+  const args = argv
   
   // デフォルト値
   let mode: ServerModeType = 'local-dev'
@@ -169,6 +169,9 @@ Examples:
   ocd-mcp --http --port 38291
   ocd-mcp --http --port 38291 --mode remote-server --config /path/to/config.json
 
+  # CLI（ツール相当・JSON 出力）詳細は ocd-mcp tool --help
+  ocd-mcp tool --cwd . list-roots
+
 Cursor / Claude Desktop Configuration:
   {
     "mcpServers": {
@@ -186,7 +189,14 @@ Cursor / Claude Desktop Configuration:
 // =============================================================================
 
 async function main() {
-  const args = parseArgs()
+  const argv = process.argv.slice(2)
+  if (argv[0] === 'tool') {
+    const { runOcdToolCli } = await import('./cli/ocdToolCli.js')
+    await runOcdToolCli(argv.slice(1))
+    return
+  }
+
+  const args = parseArgs(argv)
   
   const serverMode: ServerMode = {
     type: args.mode,

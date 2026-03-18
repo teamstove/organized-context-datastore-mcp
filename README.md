@@ -77,6 +77,26 @@ npx github:teamstove/organized-context-datastore-mcp --http --mode remote-server
 
 **Duplicate launch behavior**: If OCD is already running on the same port, subsequent launches log "OCD is already running on this port" and exit cleanly (exit 0). An error exit only occurs when the port is occupied by a different process. The server identity check uses **GET /whois** — if the response is `OCD`, it is recognized as an existing OCD instance.
 
+### CLI tool subcommands (same logic as MCP tools)
+
+Run read/write operations **without** starting the MCP server. Results are printed as JSON on stdout (pipe to `jq`, etc.).
+
+```bash
+ocd-mcp tool --help
+ocd-mcp tool --cwd . list-roots
+ocd-mcp tool --cwd . get-contexts --patterns 'docs/**'
+ocd-mcp tool --cwd . search --query "auth"
+```
+
+| Context | Flag | Meaning |
+|---------|------|---------|
+| Project (usual) | `--cwd <dir>` | Resolve `.ocd.config.js` upward from this directory (same as MCP `cwd`). |
+| Fixed storage | `--storage <dir>` | `loadConfig` root — **not** the HTTP `remote-server` JSON config file. |
+
+- **`--readonly`**: blocks `mutate` and `commit`.
+- **Do not** run `mutate` / `commit` against the same Git repo while the stdio MCP server is writing — risk of lock/conflict.
+- **`get-contexts --include-content`** can produce very large JSON.
+
 ---
 
 ## Cursor / IDE Configuration
