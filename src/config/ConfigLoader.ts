@@ -528,7 +528,9 @@ function resolveLocalContextRoot(root: LocalContextRootConfig, projectDir: strin
     git: root.git,
     ignorePatterns: root.ignorePatterns,
     includePatterns: root.includePatterns,
-    defaultExtension: root.defaultExtension
+    defaultExtension: root.defaultExtension,
+    // root 側で未指定のときは undefined のまま（プロジェクト treeTextFormat 等は呼び出し側で解決）
+    treePreviewFormat: root.treePreviewFormat
   }
 }
 

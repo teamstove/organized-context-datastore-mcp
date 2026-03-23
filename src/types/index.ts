@@ -737,6 +737,18 @@ export interface ContextRootConfig {
    */
   defaultExtension?: string
   
+  /**
+   * LLM 向け tree preload（例: `ocd_get_context_tree`）時の行表示フォーマット。
+   *
+   * 省略時は `undefined`（呼び出し側がプロジェクトの `treeTextFormat` 等で解決する）。
+   *
+   * 使用可能な変数: `$path`, `$title`, `$summary`
+   *
+   * @example '$path: $title $summary'
+   * @example '$path: $title' // summary を省きたい場合
+   */
+  treePreviewFormat?: string
+  
   // ==========================================================================
   // Git 設定
   // ==========================================================================
@@ -895,6 +907,18 @@ export interface LocalContextRootConfig {
   
   /** 新規作成時のデフォルト拡張子 (例: ".md", ".context.md") */
   defaultExtension?: string
+  
+  /**
+   * LLM 向け tree preload 時の表示フォーマット（この Context Root 専用）。
+   *
+   * 省略時はプロジェクトレベルの `treeTextFormat` を継承する想定で、値は `undefined` のまま返す（デフォルト文字列の解決は Engine 等の呼び出し側の責務）。
+   *
+   * 使用可能な変数: `$path`, `$title`, `$summary`
+   *
+   * @example '$path: $title $summary'
+   * @example '$path: $title' // summary 不要な場合
+   */
+  treePreviewFormat?: string
 }
 
 /**
