@@ -278,6 +278,25 @@ async function startStdioServer(serverMode: ServerMode, webUiOptions: StdioWebUi
   if (webUiStarted) {
     console.error(`[OCD-MCP] Web UI: http://localhost:${webUiOptions.webUiPort}/viewer`)
   }
+
+  // --- stdin close ガード: SDK の StdioServerTransport が stdin EOF を検知しない欠陥を補完 ---
+  // @modelcontextprotocol/sdk の StdioServerTransport は stdin の 'data' と 'error' のみ listen し、
+  // 'end'/'close' を listen しない。親プロセスが死んで stdin パイプが閉じても、
+  // MCP サーバーは気づかず生き続ける。
+  // 参照: @modelcontextprotocol/sdk Issue #202, #1564
+  process.stdin.on('close', () => {
+    console.error('[OCD-MCP] stdin closed. Exiting to prevent orphaning.')
+    process.exit(0)
+  })
+
+  // EPIPE: 親プロセスが死んだ後に stdout へ書き込もうとすると発生
+  process.stdout.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EPIPE' || err.code === 'ERR_STREAM_DESTROYED') {
+      console.error('[OCD-MCP] Client disconnected (EPIPE). Exiting.')
+      process.exit(0)
+    }
+    throw err
+  })
   
   // Graceful shutdown で Web UI サーバーも停止
   const shutdown = async () => {
