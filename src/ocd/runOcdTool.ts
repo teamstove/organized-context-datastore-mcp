@@ -71,6 +71,8 @@ export async function runOcdTool(
         format: args.format as 'json' | 'tree-text' | undefined,
         treeTextFormat: args.treeTextFormat as string | undefined,
         maxNodes: args.maxNodes as number | undefined,
+        patterns: args.patterns as string[] | undefined,
+        exclude: args.exclude as string[] | undefined,
       })
 
     case 'search_contexts':

@@ -209,7 +209,9 @@ export class ReadTools {
       depth,
       format = 'tree-text',
       treeTextFormat = '$path: $title $summary',
-      maxNodes = 1000
+      maxNodes = 1000,
+      patterns,
+      exclude,
     } = options
     
     if (!rootIds || rootIds.length === 0) {
@@ -223,7 +225,9 @@ export class ReadTools {
         depth,
         format,
         treeTextFormat,
-        maxNodes
+        maxNodes,
+        patterns,
+        exclude,
       })
     }
     
@@ -238,7 +242,9 @@ export class ReadTools {
         depth,
         format,
         treeTextFormat,
-        maxNodes
+        maxNodes,
+        patterns,
+        exclude,
       })
       results.push(result)
       totalNodes += result.totalNodes
@@ -261,22 +267,39 @@ export class ReadTools {
     format?: 'json' | 'tree-text'
     treeTextFormat?: string
     maxNodes?: number
+    /** rootId 相対の include glob。1件以上なら depth より優先 */
+    patterns?: string[]
+    /** rootId 相対の exclude glob → glob ignore に渡す */
+    exclude?: string[]
   }): Promise<ContextTreeResult> {
     const { 
       rootId, 
       depth,
       format = 'tree-text',
       treeTextFormat = '$path: $title $summary',
-      maxNodes = 1000
+      maxNodes = 1000,
+      patterns: patternsOpt,
+      exclude: excludeOpt,
     } = options
     
-    // パターンを構築
-    const patterns = depth !== undefined
-      ? this.buildDepthPatterns(rootId, depth)
-      : [`${rootId}/**/*.md`]
+    // パターン解決: 明示 patterns（非空） > depth > デフォルト全件
+    const hasExplicitPatterns = !!(patternsOpt && patternsOpt.length > 0)
+    let resolvedPatterns: string[]
+    if (hasExplicitPatterns) {
+      resolvedPatterns = patternsOpt!.map(p => `${rootId}/${p}`)
+    } else if (depth !== undefined) {
+      resolvedPatterns = this.buildDepthPatterns(rootId, depth)
+    } else {
+      resolvedPatterns = [`${rootId}/**/*.md`]
+    }
+    
+    const ignorePatterns =
+      excludeOpt && excludeOpt.length > 0
+        ? excludeOpt.map(p => `${rootId}/${p}`)
+        : undefined
     
     // ファイル一覧取得
-    const files = await this.store.listMultiple(patterns)
+    const files = await this.store.listMultiple(resolvedPatterns, ignorePatterns)
     
     // サマリを生成
     const summaries: ContextNodeSummary[] = []

@@ -314,14 +314,33 @@ export class CompositeStore implements IKnowledgeStore {
     return store.read(relativePath)
   }
   
-  async list(pattern: string): Promise<string[]> {
-    return this.listMultiple([pattern])
+  async list(pattern: string, exclude?: string[]): Promise<string[]> {
+    return this.listMultiple([pattern], exclude)
+  }
+  
+  /**
+   * Context Root id 付きの exclude パターンを、各ストア内の相対 glob に変換する
+   */
+  private relativeExcludeForStore(
+    routePrefix: string,
+    exclude: string[] | undefined
+  ): string[] | undefined {
+    if (!exclude?.length) return undefined
+    const rel: string[] = []
+    for (const e of exclude) {
+      if (e === routePrefix) {
+        rel.push('**/*')
+      } else if (e.startsWith(routePrefix + '/')) {
+        rel.push(e.slice(routePrefix.length + 1))
+      }
+    }
+    return rel.length ? rel : undefined
   }
   
   /**
    * 複数パターンでファイル一覧を取得 (クロスストア対応)
    */
-  async listMultiple(patterns: string[]): Promise<string[]> {
+  async listMultiple(patterns: string[], exclude?: string[]): Promise<string[]> {
     const storePatterns = this.routePatterns(patterns)
     const results: string[] = []
     
@@ -343,16 +362,18 @@ export class CompositeStore implements IKnowledgeStore {
           return pattern
         })
         
+        const relativeExclude = this.relativeExcludeForStore(route.prefix, exclude)
+        
         // クエリを実行し、結果に id プレフィックスを追加
         listPromises.push(
-          store.listMultiple(relativePatterns).then(files => 
+          store.listMultiple(relativePatterns, relativeExclude).then(files => 
             [{ prefix: route.prefix, files }]
           )
         )
       } else if (this.defaultStore && store === this.defaultStore) {
         // デフォルトストアの場合はパターンをそのまま使用
         listPromises.push(
-          store.listMultiple(storePatternList).then(files => 
+          store.listMultiple(storePatternList, exclude).then(files => 
             [{ prefix: '', files }]
           )
         )

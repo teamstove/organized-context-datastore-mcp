@@ -241,7 +241,19 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
     depth: z.number().optional().describe('深さ制限 (省略時は全階層)'),
     format: z.enum(['tree-text', 'json']).optional().describe("出力形式 (default: 'tree-text')"),
     treeTextFormat: z.string().optional().describe('表示フォーマット (default: "$path: $title $summary"). 変数: $path, $title, $summary'),
-    maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)')
+    maxNodes: z.number().optional().describe('返却ノード数上限 (default: 1000)'),
+    patterns: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'include glob patterns (rootId 相対)。指定時は depth の代わりにこれを使用（空配列は未指定扱い）'
+      ),
+    exclude: z
+      .array(z.string())
+      .optional()
+      .describe(
+        'exclude glob patterns (rootId 相対)。指定したパスを結果から除外（glob の ignore に変換）'
+      ),
   }
   
   server.registerTool(
@@ -251,6 +263,8 @@ ${isLocalDev ? '- cwd: 作業ディレクトリ（設定探索の起点）' : ''
 
 ## パラメータ
 - rootIds: Context Root の id 配列（list_context_roots で取得した id をそのまま使用）
+- patterns (optional): include glob（rootId 相対）。指定時は depth より優先
+- exclude (optional): exclude glob（rootId 相対）。tree から除外
 
 **重要**: list_context_roots で返却された id を使用してください。
 path フィールド（実際のファイルシステムパス）は使用しないでください。
@@ -278,6 +292,8 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           format?: 'tree-text' | 'json'
           treeTextFormat?: string
           maxNodes?: number
+          patterns?: string[]
+          exclude?: string[]
         }
         const service = await resolveService(isLocalDev ? typedArgs.cwd : undefined)
         const result = await service.getContextTree({
@@ -285,7 +301,9 @@ ${isLocalDev ? '\n- cwd: 作業ディレクトリ（設定探索の起点）' : 
           depth: typedArgs.depth,
           format: typedArgs.format,
           treeTextFormat: typedArgs.treeTextFormat,
-          maxNodes: typedArgs.maxNodes
+          maxNodes: typedArgs.maxNodes,
+          patterns: typedArgs.patterns,
+          exclude: typedArgs.exclude,
         })
         return buildResult<GetContextTreeResponse>(result)
       } catch (error) {

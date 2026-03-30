@@ -244,18 +244,20 @@ export class FileGitStore implements IKnowledgeStore {
     }
   }
   
-  async list(pattern: string): Promise<string[]> {
+  async list(pattern: string, exclude?: string[]): Promise<string[]> {
     // 具体的なパス（* を含まない、.md で終わらない）の場合は
     // 複数のパターンでマッチを試みる
     const expandedPatterns = this.expandPattern(pattern)
     
     const allFiles: Set<string> = new Set()
+    const mergedIgnore =
+      exclude?.length ? [...this.ignorePatterns, ...exclude] : this.ignorePatterns
     
     for (const p of expandedPatterns) {
       const files = await glob(p, {
         cwd: this.rootPath,
         nodir: true,
-        ignore: this.ignorePatterns
+        ignore: mergedIgnore,
       })
       for (const file of files) {
         allFiles.add(file)
@@ -290,11 +292,11 @@ export class FileGitStore implements IKnowledgeStore {
     return [...allFiles].sort()
   }
   
-  async listMultiple(patterns: string[]): Promise<string[]> {
+  async listMultiple(patterns: string[], exclude?: string[]): Promise<string[]> {
     const allFiles: Set<string> = new Set()
     
     for (const pattern of patterns) {
-      const files = await this.list(pattern)
+      const files = await this.list(pattern, exclude)
       for (const file of files) {
         allFiles.add(file)
       }

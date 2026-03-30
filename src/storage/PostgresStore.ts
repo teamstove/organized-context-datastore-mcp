@@ -217,7 +217,7 @@ export class PostgresStore implements IKnowledgeStore {
    * - `*` → `%` (任意文字列)
    * - `**` → `%` (ディレクトリ横断)
    */
-  async list(pattern: string): Promise<string[]> {
+  async list(pattern: string, _exclude?: string[]): Promise<string[]> {
     const db = this.getDb()
     
     // globパターンをSQLパターンに変換
@@ -234,8 +234,10 @@ export class PostgresStore implements IKnowledgeStore {
   
   /**
    * 複数のglobパターンでパス一覧を取得
+   *
+   * exclude は FileGit 向け API との整合用。PostgreSQL 実装では未使用。
    */
-  async listMultiple(patterns: string[]): Promise<string[]> {
+  async listMultiple(patterns: string[], _exclude?: string[]): Promise<string[]> {
     const allPaths: Set<string> = new Set()
     
     for (const pattern of patterns) {

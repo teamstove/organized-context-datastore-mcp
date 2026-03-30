@@ -27,13 +27,15 @@ export interface IKnowledgeStore {
   
   /**
    * glob パターンでファイル/ノード一覧を取得
+   * @param exclude 追加の除外 glob（ストレージルート相対）。FileGitStore では glob の ignore にマージ
    */
-  list(pattern: string): Promise<string[]>
+  list(pattern: string, exclude?: string[]): Promise<string[]>
   
   /**
    * 複数の glob パターンでファイル/ノード一覧を取得
+   * @param exclude 追加の除外 glob（ストレージルート相対）
    */
-  listMultiple(patterns: string[]): Promise<string[]>
+  listMultiple(patterns: string[], exclude?: string[]): Promise<string[]>
   
   /**
    * ファイル/ノードのメタデータを取得

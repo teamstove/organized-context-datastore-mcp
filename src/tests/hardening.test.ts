@@ -30,7 +30,7 @@ function createMockStore(overrides: Partial<IKnowledgeStore> = {}): IKnowledgeSt
       return content
     },
     list: async () => [],
-    listMultiple: async () => [],
+    listMultiple: async (_patterns: string[], _exclude?: string[]) => [],
     write: async (path: string, content: string) => { storage.set(path, content) },
     delete: async (path: string) => { storage.delete(path) },
     mkdir: async () => {},

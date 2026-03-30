@@ -201,6 +201,20 @@ export interface GetContextTreeOptions {
   
   /** 返却ノード数上限 (default: 1000) */
   maxNodes?: number
+  
+  /**
+   * include glob patterns（Context Root id からの相対パス）。
+   * 1件以上あるときは depth より優先してファイル列挙に使用する。
+   * 空配列 [] は未指定と同じ扱い。
+   */
+  patterns?: string[]
+  
+  /**
+   * exclude glob patterns（Context Root id からの相対パス）。
+   * 内部では glob の ignore にマッピングする。
+   * 空配列 [] は除外なし。
+   */
+  exclude?: string[]
 }
 
 /**
