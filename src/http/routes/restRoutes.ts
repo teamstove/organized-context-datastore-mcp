@@ -206,10 +206,19 @@ export function createRestRoutes(serverMode: ServerMode): Router {
       const pathWithExt = contextPath.endsWith('.md') ? contextPath : `${contextPath}.md`
 
       const service = await resolveServiceFromCwd(cwd)
-      const contexts = await service.getContexts({
+      let contexts = await service.getContexts({
         patterns: [pathWithExt],
         includeContent: true,
       })
+
+      // plans/active/ で見つからない場合、plans/archived/ にフォールバック
+      if (contexts.length === 0 && pathWithExt.includes('/plans/active/')) {
+        const archivedPath = pathWithExt.replace('/plans/active/', '/plans/archived/')
+        contexts = await service.getContexts({
+          patterns: [archivedPath],
+          includeContent: true,
+        })
+      }
 
       if (contexts.length === 0) {
         res.status(404).json({ error: `Context not found: ${contextPath}` })
