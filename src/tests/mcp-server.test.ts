@@ -11,6 +11,10 @@ import {
   createKnowledgeGraphService, 
   type KnowledgeGraphService 
 } from '../index.js'
+import type { ContextTreeResult } from '../types/index.js'
+
+/** MCP ツール定義の inputSchema が object 相当であることをテストで扱うための最小形状 */
+type JsonObjectSchema = { properties?: Record<string, unknown>; required?: string[] }
 
 const TEST_DIR = '/tmp/mcp-server-test'
 
@@ -88,9 +92,10 @@ priority: high
       const getContexts = tools.find(t => t.name === 'get_contexts')
       
       expect(getContexts).toBeDefined()
-      expect(getContexts?.inputSchema.properties).toHaveProperty('patterns')
-      expect(getContexts?.inputSchema.properties).toHaveProperty('filter')
-      expect(getContexts?.inputSchema.required).toContain('patterns')
+      const schema = getContexts?.inputSchema as JsonObjectSchema
+      expect(schema.properties).toHaveProperty('patterns')
+      expect(schema.properties).toHaveProperty('filter')
+      expect(schema.required).toContain('patterns')
     })
     
     it('should have array-based operations schema for create_context', () => {
@@ -98,8 +103,9 @@ priority: high
       const createContext = tools.find(t => t.name === 'create_context')
       
       expect(createContext).toBeDefined()
-      expect(createContext?.inputSchema.properties).toHaveProperty('operations')
-      expect(createContext?.inputSchema.required).toContain('operations')
+      const cSchema = createContext?.inputSchema as JsonObjectSchema
+      expect(cSchema.properties).toHaveProperty('operations')
+      expect(cSchema.required).toContain('operations')
     })
     
     it('should have contentUpdates in update_context schema', () => {
@@ -107,7 +113,8 @@ priority: high
       const updateContext = tools.find(t => t.name === 'update_context')
       
       expect(updateContext).toBeDefined()
-      expect(updateContext?.inputSchema.properties).toHaveProperty('operations')
+      const uSchema = updateContext?.inputSchema as JsonObjectSchema
+      expect(uSchema.properties).toHaveProperty('operations')
       
       // 説明に contentUpdates の使い方が含まれていること
       expect(updateContext?.description).toContain('contentUpdates')
@@ -145,10 +152,10 @@ priority: high
     })
     
     it('should handle getContextTree', async () => {
-      const result = await service.getContextTree({
+      const result = (await service.getContextTree({
         rootIds: ['project'],
         format: 'json'  // JSON形式で取得
-      })
+      })) as ContextTreeResult
       
       expect(result.format).toBe('json')
       expect(Array.isArray(result.tree)).toBe(true)
@@ -156,10 +163,10 @@ priority: high
     })
     
     it('should handle getContextTree with tree-text format', async () => {
-      const result = await service.getContextTree({
+      const result = (await service.getContextTree({
         rootIds: ['project'],
         format: 'tree-text'
-      })
+      })) as ContextTreeResult
       
       expect(result.format).toBe('tree-text')
       expect(typeof result.tree).toBe('string')

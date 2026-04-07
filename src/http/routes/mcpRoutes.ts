@@ -235,7 +235,8 @@ export function createMcpRoutes(registry: ProjectRegistry): Router {
    * 必要に応じてストリーミングレスポンス (Transfer-Encoding: chunked) も対応可能
    */
   router.post('/:projectId', async (req: Request, res: Response) => {
-    const { projectId } = req.params
+    const rawProjectId = req.params.projectId
+    const projectId = Array.isArray(rawProjectId) ? rawProjectId[0] : rawProjectId
     
     try {
       // プロジェクトの存在確認

@@ -6,6 +6,7 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { createKnowledgeGraphService, type KnowledgeGraphService } from '../index.js'
+import type { ContextTreeResult } from '../types/index.js'
 
 const TEST_DIR = '/tmp/knowledge-graph-test'
 
@@ -232,10 +233,11 @@ title: 機能1
     })
     
     it('should get context tree in json format', async () => {
-      const result = await service.getContextTree({
+      // rootIds が1件のとき実装は ContextTreeResult を返す（複数件時は union 型になる）
+      const result = (await service.getContextTree({
         rootIds: ['project'],
         format: 'json'
-      })
+      })) as ContextTreeResult
       
       expect(result.format).toBe('json')
       expect(Array.isArray(result.tree)).toBe(true)
@@ -249,9 +251,9 @@ title: 機能1
     })
     
     it('should get context tree in tree-text format (default)', async () => {
-      const result = await service.getContextTree({
+      const result = (await service.getContextTree({
         rootIds: ['project']
-      })
+      })) as ContextTreeResult
       
       expect(result.format).toBe('tree-text')
       expect(typeof result.tree).toBe('string')
@@ -272,9 +274,9 @@ title: 機能1
     })
     
     it('should get context tree in flat style', async () => {
-      const result = await service.getContextTree({
+      const result = (await service.getContextTree({
         rootIds: ['project']
-      })
+      })) as ContextTreeResult
       
       expect(result.format).toBe('tree-text')
       const treeText = result.tree as string
