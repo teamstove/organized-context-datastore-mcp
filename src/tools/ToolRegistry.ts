@@ -67,10 +67,23 @@ export const ContentUpdateSchema = z.discriminatedUnion('type', [
     content: z.string().describe('新しいコンテンツ全体')
   }),
   z.object({
-    type: z.literal('regexp_replace'),
-    pattern: z.string().describe('正規表現パターン'),
-    replacement: z.string().describe('置換文字列 ($1, $2 等のグループ参照可)'),
-    flags: z.string().optional().describe('正規表現フラグ (g, i, m, s)')
+    type: z.literal('replace'),
+    search: z
+      .string()
+      .describe('検索文字列。isRegex: true の場合は正規表現パターン'),
+    replacement: z
+      .string()
+      .describe('置換先文字列。isRegex: true の場合は $1 等のキャプチャ参照が使用可能'),
+    isRegex: z
+      .boolean()
+      .optional()
+      .describe('true: search を正規表現として扱う（デフォルト: false = 完全一致）'),
+    flags: z
+      .string()
+      .optional()
+      .describe(
+        '"g"で全箇所置換（デフォルトは最初の1箇所のみ）。isRegex: true の場合は "i"(大小無視), "m"(複数行), "s"(dotAll) も使用可能'
+      ),
   })
 ])
 
@@ -411,8 +424,8 @@ summary: "Google/GitHub連携対応。JWT発行、リフレッシュトークン
 ### whole_replace - コンテンツ全置換
 { type: 'whole_replace', content: '新しいコンテンツ全体' }
 
-### regexp_replace - 正規表現置換
-pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'`,
+### replace - 部分置換（search / replacement / isRegex / flags）
+search: '$', replacement: '\\n\\n追記内容', isRegex: true, flags: 'm'`,
       inputSchema: mutateContextSchema
     },
     async (args) => {

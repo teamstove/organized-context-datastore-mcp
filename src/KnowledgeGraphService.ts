@@ -330,13 +330,15 @@ export class KnowledgeGraphService {
 ### whole_replace - コンテンツ全置換
 { type: 'whole_replace', content: '新しいコンテンツ全体' }
 
-### regexp_replace - 正規表現置換
-#### 末尾追記
-pattern: '$', replacement: '\\n\\n追記内容', flags: 'm'
-#### 先頭追記
-pattern: '^', replacement: '先頭内容\\n\\n', flags: ''
-#### セクション末尾に追記
-pattern: '(## セクション名.*?)(\\n## |$)', replacement: '$1\\n- 追記内容$2', flags: 's'`,
+### replace - 部分置換（batch-filesystem-operations と同じ search / replacement / isRegex / flags）
+#### 末尾追記（正規表現）
+search: '$', replacement: '\\n\\n追記内容', isRegex: true, flags: 'm'
+#### 先頭追記（正規表現）
+search: '^', replacement: '先頭内容\\n\\n', isRegex: true, flags: ''
+#### 完全一致で一文を差し替え（isRegex 省略 = false）
+search: '旧テキスト', replacement: '新テキスト'
+#### セクション末尾に追記（正規表現）
+search: '(## セクション名.*?)(\\n## |$)', replacement: '$1\\n- 追記内容$2', isRegex: true, flags: 's'`,
         inputSchema: {
           type: 'object',
           properties: {
@@ -365,12 +367,26 @@ pattern: '(## セクション名.*?)(\\n## |$)', replacement: '$1\\n- 追記内�
                         {
                           type: 'object',
                           properties: {
-                            type: { type: 'string', enum: ['regexp_replace'] },
-                            pattern: { type: 'string' },
-                            replacement: { type: 'string' },
-                            flags: { type: 'string' }
+                            type: { type: 'string', enum: ['replace'] },
+                            search: {
+                              type: 'string',
+                              description: '検索文字列。isRegex: true の場合は正規表現パターン'
+                            },
+                            replacement: {
+                              type: 'string',
+                              description: '置換先文字列。isRegex: true の場合は $1 等のキャプチャ参照が使用可能'
+                            },
+                            isRegex: {
+                              type: 'boolean',
+                              description: 'true: search を正規表現として扱う（デフォルト: false = 完全一致）'
+                            },
+                            flags: {
+                              type: 'string',
+                              description:
+                                '"g"で全箇所置換（デフォルトは最初の1箇所のみ）。isRegex: true の場合は "i"(大小無視), "m"(複数行), "s"(dotAll) も使用可能'
+                            }
                           },
-                          required: ['type', 'pattern', 'replacement']
+                          required: ['type', 'search', 'replacement']
                         }
                       ]
                     },

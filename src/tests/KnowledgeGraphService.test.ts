@@ -177,15 +177,16 @@ status: draft
       expect(result.results[0].path).toBe('project/update-test')
     })
     
-    it('should append content using regexp_replace', async () => {
+    it('should append content using replace (regex)', async () => {
       // mutateContext + contentUpdates で追記
       const result = await service.mutateContext([{
         type: 'update',
         path: 'project/update-test',
         contentUpdates: [{
-          type: 'regexp_replace',
-          pattern: '$',
+          type: 'replace',
+          search: '$',
           replacement: '\n\n## 追記セクション\n\n追記された内容',
+          isRegex: true,
           flags: 'm'
         }]
       }])

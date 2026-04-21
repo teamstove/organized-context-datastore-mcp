@@ -43,12 +43,12 @@
  *   tags: ['Phase1']
  * }])
  * 
- * // コンテキストを更新 (regexp_replace でセクション操作)
+ * // コンテキストを更新 (replace でセクション操作)
  * await service.updateContext([{
  *   path: 'project/features/new-feature',
  *   tags: ['completed'],
  *   contentUpdates: [
- *     { type: 'regexp_replace', pattern: '$', replacement: '\n\n## 完了メモ\n実装完了', flags: 'm' }
+ *     { type: 'replace', search: '$', replacement: '\n\n## 完了メモ\n実装完了', isRegex: true, flags: 'm' }
  *   ]
  * }])
  * 
@@ -98,7 +98,7 @@ export type {
   MoveContextOperation,
   ContentUpdate,
   ContentUpdateWholeReplace,
-  ContentUpdateRegexpReplace,
+  ContentUpdateReplace,
   
   // Legacy Types (deprecated)
   UpdateContextParams,

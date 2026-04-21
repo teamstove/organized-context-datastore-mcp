@@ -118,7 +118,7 @@ priority: high
       
       // 説明に contentUpdates の使い方が含まれていること
       expect(updateContext?.description).toContain('contentUpdates')
-      expect(updateContext?.description).toContain('regexp_replace')
+      expect(updateContext?.description).toContain('replace')
     })
   })
   
@@ -216,9 +216,10 @@ priority: high
         type: 'update',
         path: 'project/index',
         contentUpdates: [{
-          type: 'regexp_replace',
-          pattern: '$',
+          type: 'replace',
+          search: '$',
           replacement: '\n\n## 追記セクション\n\n追記された内容',
+          isRegex: true,
           flags: 'm'
         }]
       }])

@@ -581,19 +581,13 @@ export class WriteTools {
       case 'whole_replace':
         return update.content
         
-      case 'regexp_replace': {
-        // パターンの長さ制限（過度に複雑なパターンを防止）
-        if (update.pattern.length > 1000) {
-          throw new WriteError(
-            'regexp pattern exceeds maximum length (1000 chars)',
-            'INVALID_OPERATION'
-          )
-        }
-        
-        // フラグのバリデーション: 許可するフラグのみ通す
+      case 'replace': {
+        const isRegex = update.isRegex === true
+        const rawFlags = update.flags ?? ''
+
+        // フラグのバリデーション: 許可するフラグのみ通す（batch-filesystem-operations と同一）
         const allowedFlags = new Set(['g', 'i', 'm', 's'])
-        const requestedFlags = update.flags || ''
-        for (const f of requestedFlags) {
+        for (const f of rawFlags) {
           if (!allowedFlags.has(f)) {
             throw new WriteError(
               `Invalid regexp flag: '${f}'. Allowed flags: g, i, m, s`,
@@ -601,32 +595,45 @@ export class WriteTools {
             )
           }
         }
-        
-        let flags = requestedFlags
-        
-        // 's' フラグ (DOTALL) は JavaScript では対応していないので手動処理
-        const dotAll = flags.includes('s')
-        flags = flags.replace('s', '')
-        
-        // パターンを調整 (DOTALL対応)
-        let pattern = update.pattern
-        if (dotAll) {
-          pattern = pattern.replace(/\.(?![*+?]?\])/g, '[\\s\\S]')
+
+        // isRegex: true の場合のみパターン長制限（リテラル検索は長文も許容）
+        if (isRegex && update.search.length > 1000) {
+          throw new WriteError(
+            'regexp pattern exceeds maximum length (1000 chars)',
+            'INVALID_OPERATION'
+          )
         }
-        
-        // 正規表現の構文検証
+
+        // パターン構築: 完全一致時は search をエスケープしてリテラルマッチにする
+        const patternStr = isRegex ? update.search : this.escapeRegex(update.search)
+
         let regex: RegExp
         try {
-          regex = new RegExp(pattern, flags)
+          // ES2018+ の RegExp は 's' (dotAll) をネイティブサポート（batchExecutor と同様に手動変換しない）
+          regex = new RegExp(patternStr, rawFlags)
         } catch (e) {
           throw new WriteError(
             `Invalid regexp pattern: ${(e as Error).message}`,
             'INVALID_OPERATION'
           )
         }
-        
-        // タイムアウト付き実行（ReDoS 対策）
-        return this.safeRegexReplace(content, regex, update.replacement)
+
+        // マッチ件数（batchExecutor と同様: g が無ければ一時的に g を付けて全体を数える）
+        const countFlags = rawFlags.includes('g') ? rawFlags : `${rawFlags}g`
+        const matchCount = (content.match(new RegExp(patternStr, countFlags)) ?? []).length
+        if (matchCount === 0) {
+          throw new WriteError(
+            `No match found for search: "${update.search.slice(0, 50)}${update.search.length > 50 ? '...' : ''}"`,
+            'INVALID_OPERATION'
+          )
+        }
+
+        // ReDoS 対策: 正規表現モードのみタイムアウト付き置換。完全一致はネイティブ replace（$ を $$ 化）
+        if (isRegex) {
+          return this.safeRegexReplace(content, regex, update.replacement)
+        }
+        const safeReplacement = update.replacement.replace(/\$/g, '$$$$')
+        return content.replace(regex, safeReplacement)
       }
         
       default:
@@ -637,6 +644,14 @@ export class WriteTools {
     }
   }
   
+  /**
+   * 検索文字列を正規表現のリテラルとして扱うためのエスケープ
+   * （batchExecutor.escapeRegex と同一）
+   */
+  private escapeRegex(str: string): string {
+    return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  }
+
   /**
    * タイムアウト付き正規表現置換（ReDoS 対策）
    * 

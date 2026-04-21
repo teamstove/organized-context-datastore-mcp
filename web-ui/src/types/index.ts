@@ -258,7 +258,13 @@ export interface SearchResult {
  */
 export type ContentUpdate =
   | { type: 'whole_replace'; content: string }
-  | { type: 'regexp_replace'; pattern: string; replacement: string; flags?: string }
+  | {
+      type: 'replace'
+      search: string
+      replacement: string
+      isRegex?: boolean
+      flags?: string
+    }
 
 // =============================================================================
 // 編集操作パラメータ

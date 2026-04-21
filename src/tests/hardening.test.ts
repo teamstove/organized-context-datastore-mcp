@@ -436,10 +436,10 @@ describe('WriteTools slugify', () => {
 })
 
 // =============================================================================
-// 6. regexp_replace の安全性テスト
+// 6. replace（contentUpdates）の安全性テスト
 // =============================================================================
 
-describe('regexp_replace の安全性', () => {
+describe('replace（contentUpdates）の安全性', () => {
   it('正常な正規表現置換が動作する', async () => {
     const store = createMockStore()
     const md = matter.stringify('# Old Title\n\nOld content', { title: 'Test' })
@@ -451,9 +451,10 @@ describe('regexp_replace の安全性', () => {
       type: 'update',
       path: 'docs/test',
       contentUpdates: [{
-        type: 'regexp_replace',
-        pattern: 'Old',
+        type: 'replace',
+        search: 'Old',
         replacement: 'New',
+        isRegex: true,
         flags: 'g'
       }]
     }])
@@ -472,9 +473,10 @@ describe('regexp_replace の安全性', () => {
       type: 'update',
       path: 'docs/test',
       contentUpdates: [{
-        type: 'regexp_replace',
-        pattern: '[invalid',
+        type: 'replace',
+        search: '[invalid',
         replacement: 'fix',
+        isRegex: true,
         flags: ''
       }]
     }])
@@ -494,9 +496,10 @@ describe('regexp_replace の安全性', () => {
       type: 'update',
       path: 'docs/test',
       contentUpdates: [{
-        type: 'regexp_replace',
-        pattern: 'test',
+        type: 'replace',
+        search: 'test',
         replacement: 'fix',
+        isRegex: true,
         flags: 'gx'
       }]
     }])
@@ -516,15 +519,163 @@ describe('regexp_replace の安全性', () => {
       type: 'update',
       path: 'docs/test',
       contentUpdates: [{
-        type: 'regexp_replace',
-        pattern: 'a'.repeat(1001),
+        type: 'replace',
+        search: 'a'.repeat(1001),
         replacement: 'fix',
+        isRegex: true,
         flags: ''
       }]
     }])
     
     expect(result.errors).toBe(1)
     expect(result.results[0].error).toContain('maximum length')
+  })
+
+  /**
+   * replace API（batch-filesystem-operations 準拠）の完全一致モード検証
+   * - isRegex 省略 / false: search をリテラルとして扱い、replacement 内の $ はキャプチャ参照にならない
+   */
+  describe('replace contentUpdate - 完全一致（isRegex: false / 省略）', () => {
+    it('replaces literal string with default isRegex: false', async () => {
+      const store = createMockStore()
+      const md = matter.stringify('# Title\n\nOld content here', { title: 'Test' })
+      await store.write('docs/literal-default', md)
+
+      const tools = createWriteTools(store)
+
+      const result = await tools.mutateContext([{
+        type: 'update',
+        path: 'docs/literal-default',
+        contentUpdates: [{
+          type: 'replace',
+          search: 'Old content',
+          replacement: 'New content'
+          // isRegex を省略 → false（完全一致）
+        }]
+      }])
+
+      expect(result.success).toBe(1)
+      const written = await store.read('docs/literal-default')
+      const parsed = matter(written)
+      expect(parsed.content).toContain('New content here')
+      expect(parsed.content).not.toContain('Old content')
+    })
+
+    it('replaces all literal occurrences with flags: "g"', async () => {
+      const store = createMockStore()
+      const md = matter.stringify('# Body\n\nTOKEN alpha TOKEN beta TOKEN', { title: 'T' })
+      await store.write('docs/literal-global', md)
+
+      const tools = createWriteTools(store)
+
+      const result = await tools.mutateContext([{
+        type: 'update',
+        path: 'docs/literal-global',
+        contentUpdates: [{
+          type: 'replace',
+          search: 'TOKEN',
+          replacement: 'DONE',
+          flags: 'g'
+        }]
+      }])
+
+      expect(result.success).toBe(1)
+      const written = await store.read('docs/literal-global')
+      const body = matter(written).content
+      expect(body).toContain('DONE alpha DONE beta DONE')
+      expect(body).not.toContain('TOKEN')
+    })
+
+    it('treats $ as literal in replacement when isRegex: false', async () => {
+      const store = createMockStore()
+      const md = matter.stringify('# Doc\n\nPLACEHOLDER text', { title: 'P' })
+      await store.write('docs/dollar-literal', md)
+
+      const tools = createWriteTools(store)
+
+      const result = await tools.mutateContext([{
+        type: 'update',
+        path: 'docs/dollar-literal',
+        contentUpdates: [{
+          type: 'replace',
+          search: 'PLACEHOLDER',
+          replacement: 'price is $100',
+          isRegex: false
+        }]
+      }])
+
+      expect(result.success).toBe(1)
+      const written = await store.read('docs/dollar-literal')
+      expect(matter(written).content).toContain('price is $100')
+    })
+
+    it('handles regex special characters in literal search', async () => {
+      const store = createMockStore()
+      const md = matter.stringify('# Sec\n\nfoo.bar(baz) is literal', { title: 'S' })
+      await store.write('docs/literal-special', md)
+
+      const tools = createWriteTools(store)
+
+      const result = await tools.mutateContext([{
+        type: 'update',
+        path: 'docs/literal-special',
+        contentUpdates: [{
+          type: 'replace',
+          search: 'foo.bar(baz)',
+          replacement: 'REPLACED',
+          isRegex: false
+        }]
+      }])
+
+      expect(result.success).toBe(1)
+      expect(matter(await store.read('docs/literal-special')).content).toContain('REPLACED is literal')
+    })
+
+    it('throws error when literal search has no matches', async () => {
+      const store = createMockStore()
+      const md = matter.stringify('# X\n\nonly this body', { title: 'X' })
+      await store.write('docs/no-match-lit', md)
+
+      const tools = createWriteTools(store)
+
+      const result = await tools.mutateContext([{
+        type: 'update',
+        path: 'docs/no-match-lit',
+        contentUpdates: [{
+          type: 'replace',
+          search: 'this string does not exist',
+          replacement: 'x'
+        }]
+      }])
+
+      expect(result.errors).toBe(1)
+      expect(result.results[0].success).toBe(false)
+      expect(result.results[0].error).toContain('No match found')
+    })
+
+    it('throws error when regex search has no matches', async () => {
+      const store = createMockStore()
+      const md = matter.stringify('# Y\n\nplain body', { title: 'Y' })
+      await store.write('docs/no-match-re', md)
+
+      const tools = createWriteTools(store)
+
+      const result = await tools.mutateContext([{
+        type: 'update',
+        path: 'docs/no-match-re',
+        contentUpdates: [{
+          type: 'replace',
+          search: '^ZZZ+',
+          replacement: 'x',
+          isRegex: true,
+          flags: 'm'
+        }]
+      }])
+
+      expect(result.errors).toBe(1)
+      expect(result.results[0].success).toBe(false)
+      expect(result.results[0].error).toContain('No match found')
+    })
   })
 })
 

@@ -314,11 +314,11 @@ export interface CreateContextParams {
  * コンテンツ更新操作
  * 
  * - whole_replace: コンテンツ全体を置換
- * - regexp_replace: 正規表現で部分置換 (append, prepend, セクション操作も実現可能)
+ * - replace: 部分置換（デフォルトは search の完全一致。isRegex: true で正規表現）
  */
 export type ContentUpdate = 
   | ContentUpdateWholeReplace
-  | ContentUpdateRegexpReplace
+  | ContentUpdateReplace
 
 /**
  * コンテンツ全置換
@@ -330,32 +330,34 @@ export interface ContentUpdateWholeReplace {
 }
 
 /**
- * 正規表現置換
+ * 部分置換（batch-filesystem-operations の edit と同じ search / replacement / isRegex / flags）
  * 
  * ## 典型的なパターン
  * 
- * ### 末尾追記
- * pattern: '$', replacement: '\n\n追記内容', flags: 'm'
+ * ### 末尾追記（正規表現）
+ * search: '$', replacement: '\n\n追記内容', isRegex: true, flags: 'm'
  * 
- * ### 先頭追記
- * pattern: '^', replacement: '先頭内容\n\n', flags: ''
+ * ### 先頭追記（正規表現）
+ * search: '^', replacement: '先頭内容\n\n', isRegex: true, flags: ''
  * 
- * ### セクション末尾に追記
- * pattern: '(## セクション名.*?)(\n## |$)', replacement: '$1\n- 追記$2', flags: 's'
+ * ### 完全一致で一文を差し替え（isRegex 省略可 = false）
+ * search: '旧テキスト', replacement: '新テキスト'
  * 
- * ### セクション置換
- * pattern: '## セクション名\n.*?(?=\n## |$)', replacement: '## セクション名\n新内容', flags: 's'
+ * ### セクション末尾に追記（正規表現）
+ * search: '(## セクション名.*?)(\\n## |$)', replacement: '$1\n- 追記$2', isRegex: true, flags: 's'
  * 
- * ### TODO完了マーク
- * pattern: '- \\[\\s*\\] (対象タスク)', replacement: '- [x] $1'
+ * ### TODO完了マーク（正規表現）
+ * search: '- \\[\\s*\\] (対象タスク)', replacement: '- [x] $1', isRegex: true
  */
-export interface ContentUpdateRegexpReplace {
-  type: 'regexp_replace'
-  /** 正規表現パターン */
-  pattern: string
-  /** 置換文字列 ($1, $2 等のグループ参照可) */
+export interface ContentUpdateReplace {
+  type: 'replace'
+  /** 検索文字列。isRegex: true の場合は正規表現パターン */
+  search: string
+  /** 置換先文字列。isRegex: true の場合は $1 等のキャプチャ参照が使用可能 */
   replacement: string
-  /** 正規表現フラグ (g, i, m, s) */
+  /** true: search を正規表現として扱う。false / 省略: 完全一致（search をリテラルとして扱う） */
+  isRegex?: boolean
+  /** "g"で全箇所置換（省略時は最初の1箇所のみ）。isRegex: true のとき "i","m","s" も使用可能 */
   flags?: string
 }
 
@@ -584,7 +586,7 @@ export interface UpdateContextParams {
 }
 
 /**
- * @deprecated UpdateContextOperation + regexp_replace を使用してください
+ * @deprecated UpdateContextOperation + replace（contentUpdates）を使用してください
  */
 export interface AppendToContextParams {
   /** 対象パス */
