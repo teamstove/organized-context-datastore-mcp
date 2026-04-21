@@ -45,16 +45,23 @@ tags:
 { "type": "whole_replace", "content": "新しいコンテンツ全体" }
 ```
 
-### regexp_replace - 正規表現置換
+### replace - 部分置換
 
-#### 末尾追記
+`search`/`replacement` で部分置換。`isRegex: true` で正規表現モード。
+
+#### 完全一致で1箇所置換（デフォルト）
 ```json
-{ "type": "regexp_replace", "pattern": "$", "replacement": "\\n\\n追記内容", "flags": "m" }
+{ "type": "replace", "search": "古いテキスト", "replacement": "新しいテキスト" }
 ```
 
-#### セクション置換
+#### 正規表現で末尾追記
 ```json
-{ "type": "regexp_replace", "pattern": "## セクション名\\n.*?(?=\\n## |$)", "replacement": "## セクション名\\n新内容", "flags": "s" }
+{ "type": "replace", "search": "$", "replacement": "\\n\\n追記内容", "isRegex": true, "flags": "m" }
+```
+
+#### 正規表現でセクション置換
+```json
+{ "type": "replace", "search": "## セクション名\\n.*?(?=\\n## |$)", "replacement": "## セクション名\\n新内容", "isRegex": true, "flags": "s" }
 ```
 
 ## メリット
