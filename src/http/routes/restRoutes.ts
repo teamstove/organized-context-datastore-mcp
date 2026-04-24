@@ -41,6 +41,14 @@ function cleanupServiceCache(): void {
 setInterval(cleanupServiceCache, 5 * 60 * 1000)
 
 /**
+ * リクエストから cwd を解決する。
+ * query/body に cwd があればそれを使い、なければ process.cwd() にフォールバック。
+ */
+function resolveCwd(cwdParam: string | undefined): string {
+  return cwdParam || process.cwd()
+}
+
+/**
  * cwd からサービスを解決
  */
 async function resolveServiceFromCwd(cwd: string): Promise<KnowledgeGraphService> {
@@ -96,11 +104,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
   // ==========================================================================
   router.get('/roots', async (req: Request, res: Response) => {
     try {
-      const cwd = req.query.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd query parameter is required' })
-        return
-      }
+      const cwd = resolveCwd(req.query.cwd as string)
 
       const service = await resolveServiceFromCwd(cwd)
       const roots = await service.listContextRoots()
@@ -117,11 +121,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
   // ==========================================================================
   router.get('/tree', async (req: Request, res: Response) => {
     try {
-      const cwd = req.query.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd query parameter is required' })
-        return
-      }
+      const cwd = resolveCwd(req.query.cwd as string)
 
       // rootIds パラメータ（カンマ区切りまたは配列）
       const rootIdsParam = req.query.rootIds as string | undefined
@@ -158,11 +158,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
   // ==========================================================================
   router.get('/contexts', async (req: Request, res: Response) => {
     try {
-      const cwd = req.query.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd query parameter is required' })
-        return
-      }
+      const cwd = resolveCwd(req.query.cwd as string)
 
       const patterns = req.query.patterns
         ? (req.query.patterns as string).split(',')
@@ -189,11 +185,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
   // ==========================================================================
   router.get('/context/*', async (req: Request, res: Response) => {
     try {
-      const cwd = req.query.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd query parameter is required' })
-        return
-      }
+      const cwd = resolveCwd(req.query.cwd as string)
 
       // パスパラメータを取得 (/context/foo/bar/baz → foo/bar/baz)
       const contextPath = req.params[0]
@@ -237,11 +229,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
   // ==========================================================================
   router.get('/search', async (req: Request, res: Response) => {
     try {
-      const cwd = req.query.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd query parameter is required' })
-        return
-      }
+      const cwd = resolveCwd(req.query.cwd as string)
 
       const query = req.query.q as string
       if (!query) {
@@ -276,11 +264,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
         return
       }
 
-      const cwd = req.body.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd is required in request body' })
-        return
-      }
+      const cwd = resolveCwd(req.body.cwd as string)
 
       const operations = req.body.operations as ContextMutation[]
       if (!operations || !Array.isArray(operations)) {
@@ -309,11 +293,7 @@ export function createRestRoutes(serverMode: ServerMode): Router {
         return
       }
 
-      const cwd = req.body.cwd as string
-      if (!cwd) {
-        res.status(400).json({ error: 'cwd is required in request body' })
-        return
-      }
+      const cwd = resolveCwd(req.body.cwd as string)
 
       const message = req.body.message as string
       if (!message) {

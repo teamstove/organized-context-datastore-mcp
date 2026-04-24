@@ -512,8 +512,10 @@ export async function resolveConfigFromCwd(cwd: string): Promise<ResolvedConfig>
 
 /**
  * ローカル Context Root 設定を解決
+ *
+ * AI Workflow Engine の OcdAbility 等から再利用するため export。
  */
-function resolveLocalContextRoot(root: LocalContextRootConfig, projectDir: string): ContextRootConfig {
+export function resolveLocalContextRoot(root: LocalContextRootConfig, projectDir: string): ContextRootConfig {
   // 相対パスを絶対パスに解決
   const absolutePath = path.isAbsolute(root.path)
     ? root.path
